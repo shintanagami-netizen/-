@@ -1,61 +1,62 @@
 # アポイントメントリマインダー セットアップ手順
 
-## 1. 依存パッケージのインストール
+**Google Apps Script（完全無料）+ Slack Bot** で動かします。
 
-```bash
-pip install -r requirements.txt
-```
+---
 
-## 2. Google Cloud 認証設定
+## 1. Slack Bot Token の取得
 
-1. [Google Cloud Console](https://console.cloud.google.com/) を開く
-2. プロジェクトを作成（または既存のものを使用）
-3. **APIとサービス → ライブラリ** から `Gmail API` を有効化
-4. **APIとサービス → 認証情報** → 「認証情報を作成」→「OAuthクライアントID」
-   - アプリケーションの種類：**デスクトップアプリ**
-5. ダウンロードした JSON ファイルを `credentials.json` としてこのディレクトリに保存
-
-## 3. Slack Bot Token の設定
-
-1. [Slack API](https://api.slack.com/apps) でアプリを作成
-2. **OAuth & Permissions** → **Bot Token Scopes** に以下を追加：
+1. [api.slack.com/apps](https://api.slack.com/apps) を開く
+2. **「Create New App」→「From scratch」**
+3. アプリ名（例：`Appointment Reminder`）とワークスペースを選択して作成
+4. 左メニュー **「OAuth & Permissions」→「Bot Token Scopes」** に以下を追加：
    - `chat:write`
    - `im:write`
-3. アプリをワークスペースにインストールして **Bot User OAuth Token**（`xoxb-...`）をコピー
-4. 環境変数に設定：
+5. ページ上部 **「Install to Workspace」** → 許可する
+6. 表示される **Bot User OAuth Token（`xoxb-...`）** をコピーしておく
 
-```bash
-export SLACK_BOT_TOKEN=xoxb-xxxxxxxxxxxx
-```
+---
 
-cron で使う場合は crontab に直接書くか `.env` ファイルで管理してください。
+## 2. Google Apps Script の設定
 
-## 4. 初回認証（ブラウザが開きます）
+1. [script.google.com](https://script.google.com) を開く
+2. **「新しいプロジェクト」** をクリック
+3. エディタが開いたら、`reminder.gs` の中身を全部コピーして貼り付ける
+4. 1行目の `SLACK_BOT_TOKEN` を手順1でコピーしたTokenに書き換える：
+   ```js
+   var SLACK_BOT_TOKEN = "xoxb-xxxxxxxxxxxx"; // ← ここ
+   ```
+5. 上部の **「保存」**（フロッピーアイコン）をクリック
 
-```bash
-python3 reminder.py
-```
+---
 
-初回のみブラウザでGoogleアカウントへのアクセス許可を求められます。
-承認すると `token.json` が生成され、以降は自動認証されます。
+## 3. 動作確認
 
-## 5. cron で毎朝9時に自動実行
+1. 関数のドロップダウンで `sendAppointmentReminder` を選択
+2. **「実行」** ボタンをクリック
+3. 初回のみ「Gmailへのアクセス許可」が求められるので **「許可」**
+4. Slack DMに通知が届けばOK！
 
-```bash
-crontab -e
-```
+---
 
-以下の行を追加：
+## 4. 毎朝9時に自動実行するトリガー設定
 
-```
-0 9 * * * SLACK_BOT_TOKEN=xoxb-xxxxxxxxxxxx /usr/bin/python3 /path/to/reminder.py >> /path/to/reminder.log 2>&1
-```
+1. 左メニューの **「トリガー（時計アイコン）」** をクリック
+2. 右下 **「トリガーを追加」**
+3. 以下のように設定：
+   - 実行する関数：`sendAppointmentReminder`
+   - イベントのソース：**時間主導型**
+   - 時間ベースのトリガーのタイプ：**日付ベースのタイマー**
+   - 時刻：**午前9時〜10時**
+4. **「保存」** をクリック
 
-※ `/path/to/` を実際のパスに、`xoxb-xxxxxxxxxxxx` を実際のトークンに置き換えてください。
+これで毎朝9時に自動でSlack DMが届きます！
+
+---
 
 ## 動作仕様
 
-- **実行タイミング**: 毎朝9時（cron設定による）
+- **実行タイミング**: 毎朝9時（Googleのサーバーで自動実行）
 - **検索期間**: 当日〜4日後（金曜日実行時に月・火曜日もカバー）
 - **検索キーワード（件名）**: 商談 / 打ち合わせ / アポ / MTG / ミーティング / 面談 / 訪問 / meeting / appointment
-- **通知先**: Slack DM（自分宛、`U09FKNYN0LD`）
+- **通知先**: Slack DM（@メンション付き）
