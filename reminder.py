@@ -101,7 +101,7 @@ def format_slack_message(today: datetime.date, appointments: list[dict]) -> str:
     """Slack用のリマインドメッセージを作成する。"""
     end_date = today + datetime.timedelta(days=DAYS_AHEAD)
     lines = [
-        f"*:calendar: アポイントメントリマインダー*",
+        f"<@{SLACK_USER_ID}> *:calendar: アポイントメントリマインダー*",
         f"{today.strftime('%Y年%m月%d日')}（本日）〜 {end_date.strftime('%m月%d日')} の商談・アポ一覧",
         "─" * 30,
     ]
