@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-毎朝9時に当日〜2日後の商談・アポイントメントをGmailで検索し、
-自分宛にリマインドメールを送るスクリプト。
+毎朝9時に当日〜4日後の商談・アポイントメントをGmailで検索し、
+自分のSlack DMにリマインドを送るスクリプト。
 
 セットアップ:
   pip install -r requirements.txt
@@ -10,12 +10,15 @@
 Google認証:
   Google Cloud Console で Gmail API を有効にし、
   credentials.json をこのファイルと同じディレクトリに配置してください。
+
+Slack認証:
+  SLACK_BOT_TOKEN 環境変数にBot Tokenを設定してください。
+  例) export SLACK_BOT_TOKEN=xoxb-xxxxxxxxxxxx
 """
 
 import os
-import base64
 import datetime
-from email.mime.text import MIMEText
+import requests
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -23,8 +26,10 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
 # ─── 設定 ────────────────────────────────────────────────
-SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
+SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 MY_EMAIL = "shinta.nagami@salescore.jp"
+SLACK_USER_ID = "U09FKNYN0LD"   # 自分のSlack DM宛
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
 DAYS_AHEAD = 4   # 当日 + 4日後まで（金曜実行時に月・火もカバー）
 
 SEARCH_KEYWORDS = [
@@ -92,44 +97,46 @@ def fetch_appointments(service, query: str) -> list[dict]:
     return appointments
 
 
-def format_body(today: datetime.date, appointments: list[dict]) -> str:
-    """リマインドメールの本文を作成する。"""
+def format_slack_message(today: datetime.date, appointments: list[dict]) -> str:
+    """Slack用のリマインドメッセージを作成する。"""
     end_date = today + datetime.timedelta(days=DAYS_AHEAD)
     lines = [
-        f"【アポイントメントリマインダー】",
+        f"*:calendar: アポイントメントリマインダー*",
         f"{today.strftime('%Y年%m月%d日')}（本日）〜 {end_date.strftime('%m月%d日')} の商談・アポ一覧",
-        "=" * 50,
-        "",
+        "─" * 30,
     ]
 
     if not appointments:
         lines.append("該当するアポイントメントが見つかりませんでした。")
     else:
         for i, appo in enumerate(appointments, 1):
-            lines.append(f"{i}. {appo['subject']}")
+            lines.append(f"*{i}.* {appo['subject']}")
             if appo["from"] and appo["from"] != MY_EMAIL:
-                lines.append(f"   差出人: {appo['from']}")
-            lines.append(f"   日時: {appo['date']}")
+                lines.append(f"　差出人: {appo['from']}")
+            lines.append(f"　日時: {appo['date']}")
             lines.append("")
 
-    lines += [
-        "=" * 50,
-        "このメールは自動送信です。",
-    ]
     return "\n".join(lines)
 
 
-def send_reminder(service, subject: str, body: str):
-    """自分宛にリマインドメールを送信する。"""
-    msg = MIMEText(body, "plain", "utf-8")
-    msg["To"] = MY_EMAIL
-    msg["From"] = MY_EMAIL
-    msg["Subject"] = subject
+def send_slack_dm(message: str):
+    """Slack DMで自分宛にメッセージを送信する。"""
+    if not SLACK_BOT_TOKEN:
+        raise ValueError("SLACK_BOT_TOKEN が設定されていません。環境変数を確認してください。")
 
-    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
-    service.users().messages().send(
-        userId="me", body={"raw": raw}
-    ).execute()
+    resp = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+        json={
+            "channel": SLACK_USER_ID,
+            "text": message,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    if not data.get("ok"):
+        raise RuntimeError(f"Slack API エラー: {data.get('error')}")
 
 
 def main():
@@ -143,11 +150,9 @@ def main():
     appointments = fetch_appointments(service, query)
     print(f"{len(appointments)} 件のアポイントメントを検出")
 
-    body = format_body(today, appointments)
-    subject = f"【アポリマインド】{today.strftime('%m/%d')}〜{(today + datetime.timedelta(days=DAYS_AHEAD)).strftime('%m/%d')}"
-
-    send_reminder(service, subject, body)
-    print("リマインドメール送信完了")
+    message = format_slack_message(today, appointments)
+    send_slack_dm(message)
+    print("Slack DM 送信完了")
 
 
 if __name__ == "__main__":
