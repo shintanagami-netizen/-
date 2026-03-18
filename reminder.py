@@ -25,7 +25,7 @@ from googleapiclient.discovery import build
 # ─── 設定 ────────────────────────────────────────────────
 SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 MY_EMAIL = "shinta.nagami@salescore.jp"
-DAYS_AHEAD = 2   # 当日 + 2日後まで
+DAYS_AHEAD = 4   # 当日 + 4日後まで（金曜実行時に月・火もカバー）
 
 SEARCH_KEYWORDS = [
     "商談", "打ち合わせ", "アポ", "MTG", "ミーティング",
