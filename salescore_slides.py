@@ -74,6 +74,12 @@ def add_text_in_shape(shape, text, font_size=Pt(12), bold=False, color=WHITE, al
     run.font.bold = bold
     run.font.color.rgb = color
 
+LOGO_PATH = "/home/user/-/salescore_logo.png"
+
+def add_logo(slide, x, y, w, h):
+    """SALESCOREロゴ画像をスライドに追加する"""
+    slide.shapes.add_picture(LOGO_PATH, x, y, w, h)
+
 def add_header_footer(slide, title, page_num):
     # Header line
     line = add_rect(slide, Inches(0.4), Inches(0.75), Inches(12.5), Pt(1.5), fill_color=BLACK)
@@ -82,12 +88,8 @@ def add_header_footer(slide, title, page_num):
     add_textbox(slide, title, Inches(0.4), Inches(0.15), Inches(8), Inches(0.6),
                 font_size=Pt(18), bold=True, color=BLACK)
 
-    # Logo area (right)
-    logo_box = add_rect(slide, Inches(10.5), Inches(0.1), Inches(2.4), Inches(0.6),
-                        fill_color=None, line_color=None)
-    # SALESCORE text
-    add_textbox(slide, "🔥 SALESCORE", Inches(10.5), Inches(0.1), Inches(2.4), Inches(0.6),
-                font_size=Pt(16), bold=True, color=NAVY, align=PP_ALIGN.RIGHT)
+    # Logo image (right)
+    add_logo(slide, Inches(10.8), Inches(0.08), Inches(2.1), Inches(0.62))
 
     # Footer line
     add_rect(slide, Inches(0.4), Inches(7.0), Inches(12.5), Pt(1.5), fill_color=BLACK)
@@ -114,8 +116,7 @@ add_rect(slide1, Inches(0.4), Inches(0.75), Inches(12.5), Pt(1.5), fill_color=BL
 add_rect(slide1, Inches(0.4), Inches(7.0), Inches(12.5), Pt(1.5), fill_color=BLACK)
 
 # Logo top right
-add_textbox(slide1, "🔥 SALESCORE", Inches(10.0), Inches(0.1), Inches(2.9), Inches(0.6),
-            font_size=Pt(18), bold=True, color=NAVY, align=PP_ALIGN.RIGHT)
+add_logo(slide1, Inches(10.8), Inches(0.08), Inches(2.1), Inches(0.62))
 
 # 宛先
 add_textbox(slide1, "株式会社〇〇  御中", Inches(1.2), Inches(1.5), Inches(8), Inches(0.7),
