@@ -9,11 +9,16 @@ Markdown記法:
   ### セクション名                     → セクション区切りスライド（ダークネイビー全面）
   ## 1.1. 節番号 | スライドタイトル   → コンテンツスライド（節番号付き）
   ## スライドタイトル                  → コンテンツスライド（節番号なし）
-  > リード文                           → タイトル直下の概要メッセージ（太字・強調スタイル）
+  > リード文                           → タイトル直下の概要メッセージ
   - 箇条書き                           → 標準箇条書き（●）
     - サブ項目                         → 字下げ箇条書き（–）
   1. 番号付きリスト                    → 番号付きリスト
   ---                                  → コンテンツ内の視覚的区切り
+  | ヘッダー1 | ヘッダー2 |           → テーブル（Markdown標準記法）
+  |---|---|                            → テーブルヘッダー区切り行
+  ::left [タイトル]                   → 2カラムレイアウト（左カラム開始）
+  ::right [タイトル]                  → 2カラムレイアウト（右カラム開始）
+  :::                                 → カラムレイアウト終了
 """
 
 import sys
@@ -36,6 +41,7 @@ COLOR_BLACK      = RGBColor(0x00, 0x00, 0x00)   # 黒（ラインなど）
 COLOR_SECTION_NUM = RGBColor(0x55, 0x65, 0x7A)  # 節番号グレー
 COLOR_GRAY       = RGBColor(0x80, 0x80, 0x80)   # グレー（フッター・サブ記号）
 COLOR_GRAY_LIGHT = RGBColor(0xCC, 0xCC, 0xCC)   # 薄グレー（区切り線）
+COLOR_STRIPE     = RGBColor(0xF5, 0xF7, 0xFA)   # テーブル縞模様
 COLOR_WHITE      = RGBColor(0xFF, 0xFF, 0xFF)
 
 # スライドサイズ（16:9）
@@ -47,26 +53,27 @@ LOGO_W = Inches(2.2)
 LOGO_X = SLIDE_WIDTH - LOGO_W - Inches(0.15)
 LOGO_Y = Inches(0.08)
 
-# 左アクセントバー
-LEFT_BAR_W = Inches(0.08)
-
-# コンテンツ左余白（バーの外側）
+# コンテンツ左余白
 CONTENT_X  = Inches(0.50)
-CONTENT_RW = SLIDE_WIDTH - Inches(0.50) - Inches(0.35)   # 右余白
+CONTENT_RW = SLIDE_WIDTH - Inches(0.50) - Inches(0.35)
 
 # タイトルエリア
-TITLE_AREA_X       = Inches(0.50)
-TITLE_AREA_MAX_W   = SLIDE_WIDTH - Inches(2.95)   # ロゴとの重複を避ける
+TITLE_AREA_X     = Inches(0.50)
+TITLE_AREA_MAX_W = SLIDE_WIDTH - Inches(2.95)
 
 # ヘッダーライン Y（タイトル下）
-HEADER_LINE_Y  = Inches(0.83)
-HEADER_LINE_H  = Pt(1.8)
+HEADER_LINE_Y = Inches(0.83)
+HEADER_LINE_H = Pt(1.8)
 
 # フッターライン Y
-FOOTER_LINE_Y  = SLIDE_HEIGHT - Inches(0.42)
-FOOTER_LINE_H  = Pt(1.2)
+FOOTER_LINE_Y = SLIDE_HEIGHT - Inches(0.42)
+FOOTER_LINE_H = Pt(1.2)
 
 FOOTER_TEXT = "Confidential All Rights Reserved SALESCORE Inc."
+
+# テーブル行高さ
+TABLE_HEADER_ROW_H = Inches(0.40)
+TABLE_DATA_ROW_H   = Inches(0.35)
 
 
 # ─────────────────────────────────────────────
@@ -102,6 +109,18 @@ def add_rect(slide, x, y, w, h, color, line_color=None, line_w=Pt(0)):
     return shape
 
 
+def set_cell_bg(cell, color):
+    """テーブルセルの背景色をXMLで直接設定"""
+    tc = cell._tc
+    tcPr = tc.get_or_add_tcPr()
+    for tag in (qn('a:solidFill'), qn('a:noFill'), qn('a:gradFill'), qn('a:pattFill')):
+        for el in tcPr.findall(tag):
+            tcPr.remove(el)
+    sf = etree.SubElement(tcPr, qn('a:solidFill'))
+    clr = etree.SubElement(sf, qn('a:srgbClr'))
+    clr.set('val', str(color))
+
+
 def add_logo(slide, logo_path):
     if logo_path and os.path.exists(logo_path):
         slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, width=LOGO_W)
@@ -111,7 +130,6 @@ def add_footer(slide, page_num=None):
     """フッターライン + テキスト + ページ番号"""
     add_rect(slide, 0, FOOTER_LINE_Y, SLIDE_WIDTH, FOOTER_LINE_H, COLOR_BLACK)
 
-    # フッターテキスト（左）
     tb = slide.shapes.add_textbox(
         CONTENT_X, FOOTER_LINE_Y + Pt(3), Inches(8), Inches(0.35)
     )
@@ -121,7 +139,6 @@ def add_footer(slide, page_num=None):
     r.text = FOOTER_TEXT
     set_font(r, 8, color=COLOR_GRAY)
 
-    # ページ番号（右）
     if page_num is not None:
         tb2 = slide.shapes.add_textbox(
             SLIDE_WIDTH - Inches(0.6), FOOTER_LINE_Y + Pt(3),
@@ -133,6 +150,185 @@ def add_footer(slide, page_num=None):
         r2 = p2.add_run()
         r2.text = str(page_num)
         set_font(r2, 9, color=COLOR_GRAY)
+
+
+# ─────────────────────────────────────────────
+#  コンテンツレンダラー（共通ヘルパー）
+# ─────────────────────────────────────────────
+
+def render_text_items(slide, items, x, y, w, h):
+    """
+    bullet / sub_bullet / numbered / text / divider の混在リストを描画。
+    divider で分割し、各テキストブロックに高さを等分配する。
+    """
+    blocks = []
+    current_block = []
+    for item in items:
+        if item.get('type') == 'divider':
+            if current_block:
+                blocks.append(current_block)
+                current_block = []
+            blocks.append(None)
+        else:
+            current_block.append(item)
+    if current_block:
+        blocks.append(current_block)
+
+    DIVIDER_H = Pt(12)
+    n_dividers = blocks.count(None)
+    n_text_blocks = len([b for b in blocks if b is not None])
+    block_h = (h - n_dividers * DIVIDER_H) / max(n_text_blocks, 1) if n_text_blocks else h
+
+    block_y = y
+    for block in blocks:
+        if block is None:
+            add_rect(slide, x, block_y + Pt(4), w, Pt(1.0), COLOR_GRAY_LIGHT)
+            block_y += DIVIDER_H
+        else:
+            tb = slide.shapes.add_textbox(x, block_y, w, block_h)
+            tf = tb.text_frame
+            tf.word_wrap = True
+
+            first = True
+            for item in block:
+                if first:
+                    p = tf.paragraphs[0]
+                    first = False
+                else:
+                    p = tf.add_paragraph()
+
+                itype = item.get('type', 'bullet')
+                text  = item.get('text', '')
+                num   = item.get('num', '')
+
+                if itype == 'bullet':
+                    p.space_before = Pt(6)
+                    p.space_after  = Pt(2)
+                    r_sym = p.add_run()
+                    r_sym.text = "• "
+                    set_font(r_sym, 12, color=COLOR_NAVY)
+                    r_txt = p.add_run()
+                    r_txt.text = text
+                    set_font(r_txt, 13, color=COLOR_TEXT)
+
+                elif itype == 'sub_bullet':
+                    p.space_before = Pt(3)
+                    p.space_after  = Pt(1)
+                    r_sym = p.add_run()
+                    r_sym.text = "      – "
+                    set_font(r_sym, 10, color=COLOR_GRAY)
+                    r_txt = p.add_run()
+                    r_txt.text = text
+                    set_font(r_txt, 11, color=COLOR_TEXT)
+
+                elif itype == 'numbered':
+                    p.space_before = Pt(6)
+                    p.space_after  = Pt(2)
+                    r_sym = p.add_run()
+                    r_sym.text = f"{num}. "
+                    set_font(r_sym, 13, bold=True, color=COLOR_NAVY)
+                    r_txt = p.add_run()
+                    r_txt.text = text
+                    set_font(r_txt, 13, color=COLOR_TEXT)
+
+                else:  # plain text
+                    p.space_before = Pt(4)
+                    p.space_after  = Pt(2)
+                    r_txt = p.add_run()
+                    r_txt.text = text
+                    set_font(r_txt, 13, color=COLOR_TEXT)
+
+            block_y += block_h
+
+
+def render_table(slide, item, x, y, w):
+    """
+    テーブルアイテムをpptxテーブルとして描画。
+    ヘッダー行: ダークネイビー背景・白太字・中央揃え
+    データ行: ストライプ（薄グレー / 白）
+    戻り値: テーブルの高さ
+    """
+    headers = item.get('headers', [])
+    rows    = item.get('rows', [])
+    n_cols  = len(headers)
+    if n_cols == 0:
+        return Inches(0)
+
+    n_rows    = len(rows) + 1
+    table_h   = TABLE_HEADER_ROW_H + TABLE_DATA_ROW_H * len(rows)
+
+    tbl_shape = slide.shapes.add_table(n_rows, n_cols, x, y, w, table_h)
+    tbl = tbl_shape.table
+
+    # 列幅を均等に
+    col_w = w // n_cols
+    for j in range(n_cols):
+        tbl.columns[j].width = col_w
+
+    # ヘッダー行
+    tbl.rows[0].height = TABLE_HEADER_ROW_H
+    for j, hdr in enumerate(headers):
+        cell = tbl.cell(0, j)
+        set_cell_bg(cell, COLOR_DARK_NAVY)
+        p = cell.text_frame.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        r = p.add_run()
+        r.text = hdr
+        set_font(r, 11, bold=True, color=COLOR_WHITE)
+
+    # データ行（ストライプ）
+    for i, row_data in enumerate(rows):
+        tbl.rows[i + 1].height = TABLE_DATA_ROW_H
+        bg = COLOR_STRIPE if i % 2 == 0 else COLOR_WHITE
+        for j in range(n_cols):
+            cell = tbl.cell(i + 1, j)
+            set_cell_bg(cell, bg)
+            cell_text = row_data[j] if j < len(row_data) else ''
+            p = cell.text_frame.paragraphs[0]
+            p.alignment = PP_ALIGN.LEFT
+            r = p.add_run()
+            r.text = cell_text
+            set_font(r, 11, color=COLOR_TEXT)
+
+    return table_h
+
+
+def render_columns(slide, item, x, y, w, h):
+    """
+    2カラムレイアウトを描画。
+    左右のカラムタイトル（任意）＋各カラムのコンテンツ＋中央縦区切り線。
+    戻り値: 使用した高さ
+    """
+    GAP   = Inches(0.35)
+    col_w = (w - GAP) / 2
+    left_x  = x
+    right_x = x + col_w + GAP
+
+    title_h = Inches(0.38) if (item.get('left_title') or item.get('right_title')) else Inches(0)
+
+    # カラムタイトル
+    for col_x, title_text in ((left_x, item.get('left_title')), (right_x, item.get('right_title'))):
+        if title_text:
+            tb = slide.shapes.add_textbox(col_x, y, col_w, Inches(0.35))
+            tf = tb.text_frame
+            p = tf.paragraphs[0]
+            r = p.add_run()
+            r.text = title_text
+            set_font(r, 13, bold=True, color=COLOR_DARK_NAVY)
+
+    # 中央の縦区切り線
+    div_x = x + col_w + GAP / 2 - Pt(0.5)
+    add_rect(slide, div_x, y, Pt(1.0), h, COLOR_GRAY_LIGHT)
+
+    content_y = y + title_h
+    content_h = h - title_h
+
+    if item.get('left'):
+        render_text_items(slide, item['left'], left_x, content_y, col_w, content_h)
+    if item.get('right'):
+        render_text_items(slide, item['right'], right_x, content_y, col_w, content_h)
+
+    return h
 
 
 # ─────────────────────────────────────────────
@@ -150,14 +346,10 @@ def make_title_slide(prs, title, subtitle, logo_path, page_num=1):
 
     split_y = SLIDE_HEIGHT * 0.58
 
-    # 上部ネイビー背景
     add_rect(slide, 0, 0, SLIDE_WIDTH, split_y, COLOR_DARK_NAVY)
-    # 下部白背景
     add_rect(slide, 0, split_y, SLIDE_WIDTH, SLIDE_HEIGHT - split_y, COLOR_WHITE)
-    # 境界アクセントライン
     add_rect(slide, 0, split_y - Pt(3), SLIDE_WIDTH, Pt(6), COLOR_NAVY)
 
-    # タイトルテキスト（白、左寄り・上部中央）
     title_y = split_y * 0.28
     tb = slide.shapes.add_textbox(
         Inches(1.0), title_y, SLIDE_WIDTH - Inches(3.8), split_y * 0.55
@@ -170,7 +362,6 @@ def make_title_slide(prs, title, subtitle, logo_path, page_num=1):
     r.text = title
     set_font(r, 34, bold=True, color=COLOR_WHITE)
 
-    # サブタイトル（白、タイトル直下）
     if subtitle:
         sub_y = split_y * 0.28 + split_y * 0.55
         tb2 = slide.shapes.add_textbox(
@@ -183,7 +374,6 @@ def make_title_slide(prs, title, subtitle, logo_path, page_num=1):
         r2.text = subtitle.strip()
         set_font(r2, 13, color=RGBColor(0xCC, 0xD8, 0xF0))
 
-    # 下部エリアに日付などの補足（任意）
     add_logo(slide, logo_path)
     add_footer(slide, page_num)
     return slide
@@ -202,7 +392,6 @@ def make_section_slide(prs, title, section_num, logo_path, page_num=None):
     center_y = SLIDE_HEIGHT * 0.42
 
     if section_num:
-        # セクション番号ラベル
         tb_num = slide.shapes.add_textbox(
             Inches(1.2), center_y - Inches(0.55),
             SLIDE_WIDTH - Inches(2.4), Inches(0.35)
@@ -213,7 +402,6 @@ def make_section_slide(prs, title, section_num, logo_path, page_num=None):
         r_num.text = section_num
         set_font(r_num, 11, bold=True, color=COLOR_BLUE)
 
-    # セクションタイトル
     tb = slide.shapes.add_textbox(
         Inches(1.2), center_y - Inches(0.2) if section_num else center_y - Inches(0.4),
         SLIDE_WIDTH - Inches(2.4), Inches(1.2)
@@ -225,7 +413,6 @@ def make_section_slide(prs, title, section_num, logo_path, page_num=None):
     r.text = title
     set_font(r, 36, bold=True, color=COLOR_WHITE)
 
-    # アクセントライン（タイトル下）
     line_y = center_y + Inches(0.85) if not section_num else center_y + Inches(1.05)
     add_rect(slide, Inches(1.2), line_y, Inches(2.5), Pt(3), COLOR_BLUE)
 
@@ -236,23 +423,19 @@ def make_section_slide(prs, title, section_num, logo_path, page_num=None):
 
 def make_content_slide(prs, title, section_num, items, logo_path, page_num=None):
     """
-    コンテンツスライド（コンサルファームスタイル）
+    コンテンツスライド
     ・純白背景
-    ・左細ネイビーアクセントバー
-    ・節番号（小グレー）＋ メインタイトル（大ネイビー）
-    ・ダークネイビーヘッダーライン
-    ・リード文（> で指定）
-    ・箇条書き・番号付き・サブ箇条書き・区切り線
+    ・節番号（小グレー、任意）＋ メインタイトル（大・黒）
+    ・ブラックヘッダーライン
+    ・リード文 / 箇条書き / 番号付き / テーブル / 2カラム / 区切り線
     """
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_rect(slide, 0, 0, SLIDE_WIDTH, SLIDE_HEIGHT, COLOR_WHITE)
 
     # ── タイトルエリア ──
     if section_num:
-        # 節番号（小・グレー）
         tb_sec = slide.shapes.add_textbox(
-            TITLE_AREA_X, Inches(0.07),
-            TITLE_AREA_MAX_W, Inches(0.24)
+            TITLE_AREA_X, Inches(0.07), TITLE_AREA_MAX_W, Inches(0.24)
         )
         tf_sec = tb_sec.text_frame
         p_sec = tf_sec.paragraphs[0]
@@ -263,7 +446,6 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     else:
         main_title_y = Inches(0.10)
 
-    # メインタイトル（大・ダークネイビー・太字）
     tb_title = slide.shapes.add_textbox(
         TITLE_AREA_X, main_title_y, TITLE_AREA_MAX_W, Inches(0.62)
     )
@@ -274,7 +456,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     r_title.text = title
     set_font(r_title, 26, bold=True, color=COLOR_TEXT)
 
-    # ── ヘッダーライン（ブラック・全幅）──
+    # ── ヘッダーライン ──
     add_rect(slide, 0, HEADER_LINE_Y, SLIDE_WIDTH, HEADER_LINE_H, COLOR_BLACK)
 
     # ── コンテンツエリア ──
@@ -283,7 +465,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
 
     current_y = HEADER_LINE_Y + Inches(0.18)
 
-    # リード文（概要メッセージ）
+    # リード文
     if lead_items:
         lead_text = '　'.join(i['text'] for i in lead_items)
         tb_lead = slide.shapes.add_textbox(
@@ -297,94 +479,46 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         set_font(r_lead, 12, color=COLOR_TEXT)
         current_y += Inches(0.65)
 
-    # 箇条書き・テキストブロック
-    if content_items:
-        # dividerで分割し、各ブロックをテキストボックスとして描画
-        blocks = []
-        current_block = []
-        for item in content_items:
-            if item.get('type') == 'divider':
-                if current_block:
-                    blocks.append(current_block)
-                    current_block = []
-                blocks.append(None)   # 区切り線マーカー
-            else:
-                current_block.append(item)
-        if current_block:
-            blocks.append(current_block)
+    # ── セグメント分割 ──
+    # table / columns は独立セグメント、その他はテキストグループにまとめる
+    segments = []
+    text_buffer = []
+    for item in content_items:
+        if item.get('type') in ('table', 'columns'):
+            if text_buffer:
+                segments.append(('text', list(text_buffer)))
+                text_buffer = []
+            segments.append((item['type'], item))
+        else:
+            text_buffer.append(item)
+    if text_buffer:
+        segments.append(('text', text_buffer))
 
-        available_h = FOOTER_LINE_Y - current_y - Inches(0.1)
+    available_h = FOOTER_LINE_Y - current_y - Inches(0.1)
 
-        # 区切り線の数を数えて高さを按分
-        n_dividers = blocks.count(None)
-        n_blocks   = len([b for b in blocks if b is not None])
-        divider_h  = Pt(8)
-        total_divider_h = n_dividers * divider_h
-        block_h = (available_h - total_divider_h) / max(n_blocks, 1) if n_blocks else available_h
+    # テーブルの固定高さを先に計算
+    fixed_h = sum(
+        TABLE_HEADER_ROW_H + TABLE_DATA_ROW_H * len(data.get('rows', [])) + Inches(0.12)
+        for seg_type, data in segments
+        if seg_type == 'table'
+    )
 
-        block_y = current_y
-        for block in blocks:
-            if block is None:
-                # 区切り線（薄グレー）
-                div_center_y = block_y + divider_h / 2 - Pt(0.75)
-                add_rect(slide, CONTENT_X, div_center_y,
-                         CONTENT_RW, Pt(1.0), COLOR_GRAY_LIGHT)
-                block_y += divider_h
-            else:
-                tb = slide.shapes.add_textbox(CONTENT_X, block_y, CONTENT_RW, block_h)
-                tf = tb.text_frame
-                tf.word_wrap = True
+    # 残り高さをテキスト/カラムセグメントで等分
+    n_var = sum(1 for t, _ in segments if t in ('text', 'columns'))
+    var_h = (available_h - fixed_h) / max(n_var, 1) if n_var else available_h
 
-                first = True
-                for item in block:
-                    if first:
-                        p = tf.paragraphs[0]
-                        first = False
-                    else:
-                        p = tf.add_paragraph()
-
-                    itype = item.get('type', 'bullet')
-                    text  = item.get('text', '')
-                    num   = item.get('num', '')
-
-                    if itype == 'bullet':
-                        p.space_before = Pt(6)
-                        p.space_after  = Pt(2)
-                        r_sym = p.add_run()
-                        r_sym.text = "• "
-                        set_font(r_sym, 12, color=COLOR_NAVY)
-                        r_txt = p.add_run()
-                        r_txt.text = text
-                        set_font(r_txt, 13, color=COLOR_TEXT)
-
-                    elif itype == 'sub_bullet':
-                        p.space_before = Pt(3)
-                        p.space_after  = Pt(1)
-                        r_sym = p.add_run()
-                        r_sym.text = "      – "
-                        set_font(r_sym, 10, color=COLOR_GRAY)
-                        r_txt = p.add_run()
-                        r_txt.text = text
-                        set_font(r_txt, 11, color=COLOR_TEXT)
-
-                    elif itype == 'numbered':
-                        p.space_before = Pt(6)
-                        p.space_after  = Pt(2)
-                        r_sym = p.add_run()
-                        r_sym.text = f"{num}. "
-                        set_font(r_sym, 13, bold=True, color=COLOR_NAVY)
-                        r_txt = p.add_run()
-                        r_txt.text = text
-                        set_font(r_txt, 13, color=COLOR_TEXT)
-
-                    else:   # plain text
-                        p.space_before = Pt(4)
-                        p.space_after  = Pt(2)
-                        r_txt = p.add_run()
-                        r_txt.text = text
-                        set_font(r_txt, 13, color=COLOR_TEXT)
-
-                block_y += block_h
+    # ── セグメント描画 ──
+    y = current_y
+    for seg_type, seg_data in segments:
+        if seg_type == 'text':
+            render_text_items(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
+            y += var_h
+        elif seg_type == 'table':
+            h = render_table(slide, seg_data, CONTENT_X, y, CONTENT_RW)
+            y += h + Inches(0.12)
+        elif seg_type == 'columns':
+            render_columns(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
+            y += var_h
 
     add_logo(slide, logo_path)
     add_footer(slide, page_num)
@@ -403,14 +537,85 @@ def parse_markdown(md_text):
       section : {type, title, section_num}
       content : {type, title, section_num, items}
     """
-    slides   = []
-    current  = None
+    slides        = []
+    current       = None
+    col_side      = None   # None | 'left' | 'right'
+    table_header  = None   # 保留中のテーブルヘッダー行
+    table_active  = None   # 処理中のテーブルアイテム
+
+    def flush_table():
+        nonlocal table_header, table_active
+        if table_active and current and current.get('type') == 'content':
+            _append_item(table_active)
+        table_header = None
+        table_active = None
+
+    def _append_item(item):
+        """col_side に応じてアイテムを適切な場所に追加"""
+        if (col_side
+                and current.get('items')
+                and current['items'][-1].get('type') == 'columns'):
+            current['items'][-1][col_side].append(item)
+        else:
+            current['items'].append(item)
 
     for raw_line in md_text.splitlines():
         line = raw_line.strip()
 
+        # ── テーブル行の検出（| で始まる行）──
+        if line.startswith('|'):
+            if re.match(r'^[\|\s\-:]+$', line):
+                # 区切り行（|---|---|）→ ヘッダー確定
+                if table_header is not None and current and current.get('type') == 'content':
+                    table_active = {
+                        'type': 'table',
+                        'headers': table_header,
+                        'rows': []
+                    }
+                    table_header = None
+            else:
+                # データ行
+                cells = [c.strip() for c in line.strip('|').split('|')]
+                if table_active is not None:
+                    table_active['rows'].append(cells)
+                else:
+                    flush_table()
+                    table_header = cells
+            continue
+
+        # テーブル以外の行が来たらテーブルを確定
+        flush_table()
+
+        # ── H3 → セクション区切りスライド ──
+        if line.startswith('### '):
+            if current:
+                slides.append(current)
+            raw_title = line[4:].strip()
+            if ' | ' in raw_title:
+                sec, ttl = raw_title.split(' | ', 1)
+                current = {'type': 'section', 'title': ttl.strip(),
+                           'section_num': sec.strip(), 'items': []}
+            else:
+                current = {'type': 'section', 'title': raw_title,
+                           'section_num': None, 'items': []}
+            col_side = None
+
+        # ── H2 → コンテンツスライド ──
+        elif line.startswith('## '):
+            if current:
+                slides.append(current)
+            raw_title = line[3:].strip()
+            if ' | ' in raw_title:
+                sec, ttl = raw_title.split(' | ', 1)
+                current = {'type': 'content', 'title': ttl.strip(),
+                           'section_num': sec.strip(), 'items': []}
+            else:
+                current = {'type': 'content', 'title': raw_title,
+                           'section_num': None, 'items': []}
+            col_side = None
+
         # ── H1 → タイトルスライド ──
-        if line.startswith('# '):
+        elif line.startswith('# '):
             if current:
                 slides.append(current)
             current = {
@@ -419,64 +624,75 @@ def parse_markdown(md_text):
                 'subtitle': '',
                 'items': [],
             }
+            col_side = None
 
-        # ── H3 → セクション区切りスライド ──
-        elif line.startswith('### '):
-            if current:
-                slides.append(current)
-            raw_title = line[4:].strip()
-            # "番号 | タイトル" 形式
-            if ' | ' in raw_title:
-                sec, ttl = raw_title.split(' | ', 1)
-                current = {'type': 'section', 'title': ttl.strip(),
-                           'section_num': sec.strip(), 'items': []}
-            else:
-                current = {'type': 'section', 'title': raw_title,
-                           'section_num': None, 'items': []}
+        # ── 2カラムレイアウト ──
+        elif line.startswith('::left'):
+            col_side  = 'left'
+            col_title = line[6:].strip() or None
+            if current and current.get('type') == 'content':
+                if not current['items'] or current['items'][-1].get('type') != 'columns':
+                    current['items'].append({
+                        'type': 'columns',
+                        'left': [], 'right': [],
+                        'left_title': col_title, 'right_title': None
+                    })
+                elif col_title:
+                    current['items'][-1]['left_title'] = col_title
 
-        # ── H2 → コンテンツスライド ──
-        elif line.startswith('## '):
-            if current:
-                slides.append(current)
-            raw_title = line[3:].strip()
-            # "節番号 | タイトル" 形式
-            if ' | ' in raw_title:
-                sec, ttl = raw_title.split(' | ', 1)
-                current = {'type': 'content', 'title': ttl.strip(),
-                           'section_num': sec.strip(), 'items': []}
-            else:
-                current = {'type': 'content', 'title': raw_title,
-                           'section_num': None, 'items': []}
+        elif line.startswith('::right'):
+            col_side  = 'right'
+            col_title = line[7:].strip() or None
+            if current and current.get('type') == 'content':
+                if not current['items'] or current['items'][-1].get('type') != 'columns':
+                    current['items'].append({
+                        'type': 'columns',
+                        'left': [], 'right': [],
+                        'left_title': None, 'right_title': col_title
+                    })
+                elif col_title:
+                    current['items'][-1]['right_title'] = col_title
+
+        elif line == ':::':
+            col_side = None
 
         # ── リード文（> blockquote）──
         elif line.startswith('> '):
             text = line[2:].strip()
-            if current and current.get('type') in ('content',):
+            if current and current.get('type') == 'content':
                 current['items'].append({'type': 'lead', 'text': text})
 
-        # ── 区切り線 ---  ──
+        # ── 区切り線 --- ──
         elif line == '---':
             if current and current.get('type') == 'content':
-                current['items'].append({'type': 'divider'})
+                _append_item({'type': 'divider'})
+
+        # ── 字下げ箇条書き（インデント付き - or *）──
+        elif re.match(r'^\s{2,}[\*\-] ', raw_line):
+            text = re.sub(r'^\s+[\*\-] ', '', raw_line).strip()
+            if current:
+                _append_item({'type': 'sub_bullet', 'text': text})
 
         # ── 標準箇条書き（* または -）──
         elif re.match(r'^[\*\-] ', line):
             text = line[2:].strip()
             if current:
-                current['items'].append({'type': 'bullet', 'text': text})
-
-        # ── 字下げ箇条書き ──
-        elif re.match(r'^\s{2,}[\*\-] ', raw_line):
-            text = re.sub(r'^\s+[\*\-] ', '', raw_line).strip()
-            if current:
-                current['items'].append({'type': 'sub_bullet', 'text': text})
+                _append_item({'type': 'bullet', 'text': text})
 
         # ── 番号付きリスト ──
         elif re.match(r'^\d+\. ', line):
             text = re.sub(r'^\d+\. ', '', line).strip()
-            num = len([i for i in (current.get('items', [])) if i.get('type') == 'numbered']) + 1
+            # 同一コンテキスト内での連番
+            if (col_side
+                    and current.get('items')
+                    and current['items'][-1].get('type') == 'columns'):
+                col_items = current['items'][-1][col_side]
+                num = len([i for i in col_items if i.get('type') == 'numbered']) + 1
+            else:
+                num = len([i for i in current.get('items', [])
+                           if i.get('type') == 'numbered']) + 1
             if current:
-                current['items'].append({'type': 'numbered', 'text': text, 'num': num})
+                _append_item({'type': 'numbered', 'text': text, 'num': num})
 
         # ── タイトルスライドのサブタイトル行 ──
         elif line and current and current['type'] == 'title':
@@ -484,8 +700,9 @@ def parse_markdown(md_text):
 
         # ── その他テキスト（コンテンツスライドの平文）──
         elif line and current and current.get('type') == 'content':
-            current['items'].append({'type': 'text', 'text': line})
+            _append_item({'type': 'text', 'text': line})
 
+    flush_table()
     if current:
         slides.append(current)
 
