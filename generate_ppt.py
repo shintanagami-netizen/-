@@ -25,11 +25,10 @@ COLOR_BULLET    = RGBColor(0x00, 0x47, 0xAB)  # 箇条書き記号の色
 SLIDE_WIDTH  = Inches(13.33)
 SLIDE_HEIGHT = Inches(7.5)
 
-# ロゴサイズ・位置（右上）
-LOGO_W = Inches(1.5)
-LOGO_H = Inches(0.6)
-LOGO_X = SLIDE_WIDTH - LOGO_W - Inches(0.2)
-LOGO_Y = Inches(0.1)
+# ロゴサイズ・位置（右上）幅だけ指定、高さは縦横比を自動維持
+LOGO_W = Inches(2.2)
+LOGO_X = SLIDE_WIDTH - LOGO_W - Inches(0.15)
+LOGO_Y = Inches(0.08)
 
 
 def set_font(run, size, bold=False, color=None, italic=False):
@@ -53,7 +52,8 @@ def add_rect(slide, x, y, w, h, color):
 
 def add_logo(slide, logo_path):
     if logo_path and os.path.exists(logo_path):
-        slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, LOGO_W, LOGO_H)
+        # width のみ指定 → 縦横比を自動で維持
+        slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, width=LOGO_W)
 
 
 def add_textbox(slide, text, x, y, w, h, size, bold=False, color=None,
