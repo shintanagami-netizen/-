@@ -285,11 +285,18 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
 
     current_y = HEADER_LINE_Y + Inches(0.18)
 
-    # リード文（概要メッセージ）
+    # リード文（概要メッセージ）─ 薄ネイビー背景＋テキスト
     if lead_items:
         lead_text = '　'.join(i['text'] for i in lead_items)
+        lead_h = Inches(0.60)
+        # 背景ボックス（薄いネイビー）※先に描画して背面に
+        add_rect(slide,
+                 0, current_y,
+                 SLIDE_WIDTH, lead_h,
+                 RGBColor(0xEE, 0xF2, 0xF9))
+        # テキスト（前面）
         tb_lead = slide.shapes.add_textbox(
-            CONTENT_X, current_y, CONTENT_RW, Inches(0.60)
+            CONTENT_X, current_y + Pt(5), CONTENT_RW, lead_h - Pt(6)
         )
         tf_lead = tb_lead.text_frame
         tf_lead.word_wrap = True
@@ -297,7 +304,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         r_lead = p_lead.add_run()
         r_lead.text = lead_text
         set_font(r_lead, 12, color=COLOR_TEXT)
-        current_y += Inches(0.65)
+        current_y += lead_h + Inches(0.08)
 
     # 箇条書き・テキストブロック
     if content_items:
