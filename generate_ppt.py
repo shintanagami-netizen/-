@@ -159,7 +159,7 @@ def set_cell_bg(cell, color):
 
 def add_logo(slide, logo_path):
     if logo_path and os.path.exists(logo_path):
-        slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, width=LOGO_W, height=LOGO_H)
+        slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, width=LOGO_W)
     else:
         # フォールバック: テキスト代替
         tb = slide.shapes.add_textbox(LOGO_X, LOGO_Y, LOGO_W, LOGO_H)
