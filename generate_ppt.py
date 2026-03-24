@@ -28,12 +28,13 @@ from lxml import etree
 
 
 # ===== SALESCORE カラーパレット =====
-COLOR_DARK_NAVY  = RGBColor(0x1D, 0x34, 0x61)   # 濃いネイビー（背景・ライン・左バー）
+COLOR_DARK_NAVY  = RGBColor(0x1D, 0x34, 0x61)   # 濃いネイビー（タイトルスライド背景・セクション帯）
 COLOR_NAVY       = RGBColor(0x1B, 0x4F, 0xA8)   # ミディアムネイビー（番号・記号アクセント）
 COLOR_BLUE       = RGBColor(0x1E, 0x6F, 0xD8)   # ブランドブルー（セクション区切りアクセント）
 COLOR_TEXT       = RGBColor(0x1A, 0x1A, 0x1A)   # ほぼ黒（本文テキスト）
+COLOR_BLACK      = RGBColor(0x00, 0x00, 0x00)   # 黒（ラインなど）
 COLOR_SECTION_NUM = RGBColor(0x55, 0x65, 0x7A)  # 節番号グレー
-COLOR_GRAY       = RGBColor(0x88, 0x88, 0x88)   # グレー（フッター・サブ記号）
+COLOR_GRAY       = RGBColor(0x80, 0x80, 0x80)   # グレー（フッター・サブ記号）
 COLOR_GRAY_LIGHT = RGBColor(0xCC, 0xCC, 0xCC)   # 薄グレー（区切り線）
 COLOR_WHITE      = RGBColor(0xFF, 0xFF, 0xFF)
 
@@ -108,30 +109,30 @@ def add_logo(slide, logo_path):
 
 def add_footer(slide, page_num=None):
     """フッターライン + テキスト + ページ番号"""
-    add_rect(slide, 0, FOOTER_LINE_Y, SLIDE_WIDTH, FOOTER_LINE_H, COLOR_DARK_NAVY)
+    add_rect(slide, 0, FOOTER_LINE_Y, SLIDE_WIDTH, FOOTER_LINE_H, COLOR_BLACK)
 
     # フッターテキスト（左）
     tb = slide.shapes.add_textbox(
-        CONTENT_X, FOOTER_LINE_Y + Pt(4), Inches(8), Inches(0.32)
+        CONTENT_X, FOOTER_LINE_Y + Pt(3), Inches(8), Inches(0.35)
     )
     tf = tb.text_frame
     p = tf.paragraphs[0]
     r = p.add_run()
     r.text = FOOTER_TEXT
-    set_font(r, 7.5, color=COLOR_GRAY)
+    set_font(r, 8, color=COLOR_GRAY)
 
-    # ページ番号（中央）
+    # ページ番号（右）
     if page_num is not None:
         tb2 = slide.shapes.add_textbox(
-            SLIDE_WIDTH / 2 - Inches(0.3), FOOTER_LINE_Y + Pt(4),
-            Inches(0.6), Inches(0.32)
+            SLIDE_WIDTH - Inches(0.6), FOOTER_LINE_Y + Pt(3),
+            Inches(0.45), Inches(0.35)
         )
         tf2 = tb2.text_frame
         p2 = tf2.paragraphs[0]
-        p2.alignment = PP_ALIGN.CENTER
+        p2.alignment = PP_ALIGN.RIGHT
         r2 = p2.add_run()
         r2.text = str(page_num)
-        set_font(r2, 8.5, color=COLOR_GRAY)
+        set_font(r2, 9, color=COLOR_GRAY)
 
 
 # ─────────────────────────────────────────────
@@ -246,9 +247,6 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_rect(slide, 0, 0, SLIDE_WIDTH, SLIDE_HEIGHT, COLOR_WHITE)
 
-    # ── 左アクセントバー ──
-    add_rect(slide, 0, 0, LEFT_BAR_W, SLIDE_HEIGHT, COLOR_DARK_NAVY)
-
     # ── タイトルエリア ──
     if section_num:
         # 節番号（小・グレー）
@@ -274,10 +272,10 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     p_title = tf_title.paragraphs[0]
     r_title = p_title.add_run()
     r_title.text = title
-    set_font(r_title, 26, bold=True, color=COLOR_DARK_NAVY)
+    set_font(r_title, 26, bold=True, color=COLOR_TEXT)
 
-    # ── ヘッダーライン（ダークネイビー・全幅）──
-    add_rect(slide, 0, HEADER_LINE_Y, SLIDE_WIDTH, HEADER_LINE_H, COLOR_DARK_NAVY)
+    # ── ヘッダーライン（ブラック・全幅）──
+    add_rect(slide, 0, HEADER_LINE_Y, SLIDE_WIDTH, HEADER_LINE_H, COLOR_BLACK)
 
     # ── コンテンツエリア ──
     lead_items    = [i for i in items if i.get('type') == 'lead']
@@ -285,18 +283,11 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
 
     current_y = HEADER_LINE_Y + Inches(0.18)
 
-    # リード文（概要メッセージ）─ 薄ネイビー背景＋テキスト
+    # リード文（概要メッセージ）
     if lead_items:
         lead_text = '　'.join(i['text'] for i in lead_items)
-        lead_h = Inches(0.60)
-        # 背景ボックス（薄いネイビー）※先に描画して背面に
-        add_rect(slide,
-                 0, current_y,
-                 SLIDE_WIDTH, lead_h,
-                 RGBColor(0xEE, 0xF2, 0xF9))
-        # テキスト（前面）
         tb_lead = slide.shapes.add_textbox(
-            CONTENT_X, current_y + Pt(5), CONTENT_RW, lead_h - Pt(6)
+            CONTENT_X, current_y, CONTENT_RW, Inches(0.60)
         )
         tf_lead = tb_lead.text_frame
         tf_lead.word_wrap = True
@@ -304,7 +295,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         r_lead = p_lead.add_run()
         r_lead.text = lead_text
         set_font(r_lead, 12, color=COLOR_TEXT)
-        current_y += lead_h + Inches(0.08)
+        current_y += Inches(0.65)
 
     # 箇条書き・テキストブロック
     if content_items:
