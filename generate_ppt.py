@@ -32,44 +32,79 @@ from pptx.oxml.ns import qn
 from lxml import etree
 
 
-# ===== SALESCORE カラーパレット =====
-COLOR_DARK_NAVY  = RGBColor(0x1D, 0x34, 0x61)   # 濃いネイビー（タイトルスライド背景・セクション帯）
-COLOR_NAVY       = RGBColor(0x1B, 0x4F, 0xA8)   # ミディアムネイビー（番号・記号アクセント）
-COLOR_BLUE       = RGBColor(0x1E, 0x6F, 0xD8)   # ブランドブルー（セクション区切りアクセント）
-COLOR_TEXT       = RGBColor(0x1A, 0x1A, 0x1A)   # ほぼ黒（本文テキスト）
-COLOR_BLACK      = RGBColor(0x00, 0x00, 0x00)   # 黒（ラインなど）
-COLOR_SECTION_NUM = RGBColor(0x55, 0x65, 0x7A)  # 節番号グレー
-COLOR_GRAY       = RGBColor(0x80, 0x80, 0x80)   # グレー（フッター・サブ記号）
-COLOR_GRAY_LIGHT = RGBColor(0xCC, 0xCC, 0xCC)   # 薄グレー（区切り線）
+# ===== SALESCORE カラーパレット（salescore-pptx-format ベース）=====
+COLOR_PRIMARY    = RGBColor(0x1A, 0x1A, 0x1A)   # #1a1a1a 基本テキスト・ライン
+COLOR_ACCENT     = RGBColor(0x00, 0x66, 0xCD)   # #0066cd アクセント（記号・強調）
+COLOR_DANGER     = RGBColor(0xE7, 0x4C, 0x3B)   # #e74c3b 重要ポイント（ごくわずか）
+COLOR_MUTED      = RGBColor(0x88, 0x88, 0x88)   # #888888 フッター・ページ番号
+COLOR_WHITE      = RGBColor(0xFF, 0xFF, 0xFF)   # 背景・テーブルデータ行
+COLOR_LIGHT_GRAY = RGBColor(0xF5, 0xF5, 0xF5)   # 薄グレー背景
+COLOR_MID_GRAY   = RGBColor(0xCC, 0xCC, 0xCC)   # 区切り線・縦区切り
 COLOR_STRIPE     = RGBColor(0xF5, 0xF7, 0xFA)   # テーブル縞模様
-COLOR_WHITE      = RGBColor(0xFF, 0xFF, 0xFF)
+# セクション・タイトルスライド用（補足レイアウト）
+COLOR_DARK_NAVY  = RGBColor(0x1D, 0x34, 0x61)   # セクション全面・タイトル背景
+COLOR_NAVY       = RGBColor(0x1B, 0x4F, 0xA8)   # セクションアクセント
+COLOR_BLUE       = RGBColor(0x1E, 0x6F, 0xD8)   # セクションアクセントライン
+# 後方互換エイリアス
+COLOR_TEXT       = COLOR_PRIMARY
+COLOR_BLACK      = COLOR_PRIMARY
+COLOR_GRAY       = COLOR_MUTED
+COLOR_GRAY_LIGHT = COLOR_MID_GRAY
+COLOR_SECTION_NUM = COLOR_MUTED
+
+# フォント（salescore-pptx-format 必須）
+FONT_NAME = "Meiryo UI"
 
 # スライドサイズ（16:9）
 SLIDE_WIDTH  = Inches(13.33)
 SLIDE_HEIGHT = Inches(7.5)
 
-# ロゴ（右上・縦横比維持）
-LOGO_W = Inches(2.2)
-LOGO_X = SLIDE_WIDTH - LOGO_W - Inches(0.15)
-LOGO_Y = Inches(0.08)
+# ===== 共通レイアウト座標（salescore-pptx-format 実測値）=====
 
-# コンテンツ左余白
-CONTENT_X  = Inches(0.50)
-CONTENT_RW = SLIDE_WIDTH - Inches(0.50) - Inches(0.35)
+# ロゴ（右上）
+LOGO_X = Inches(10.213)
+LOGO_Y = Inches(0.091)
+LOGO_W = Inches(2.205)
+LOGO_H = Inches(0.512)
+
+# コンテンツ左端・幅
+CONTENT_X  = Inches(0.917)
+CONTENT_RW = Inches(11.5)
 
 # タイトルエリア
-TITLE_AREA_X     = Inches(0.50)
-TITLE_AREA_MAX_W = SLIDE_WIDTH - Inches(2.95)
+TITLE_AREA_X = Inches(0.906)
+TITLE_AREA_W = Inches(9.5)
+TITLE_AREA_Y = Inches(0.276)
+TITLE_AREA_H = Inches(0.315)
 
-# ヘッダーライン Y（タイトル下）
-HEADER_LINE_Y = Inches(0.83)
-HEADER_LINE_H = Pt(1.8)
+# ヘッダーライン
+HEADER_LINE_Y = Inches(0.689)
+HEADER_LINE_H = Pt(1.5)
 
-# フッターライン Y
-FOOTER_LINE_Y = SLIDE_HEIGHT - Inches(0.42)
-FOOTER_LINE_H = Pt(1.2)
+# リード文エリア
+LEAD_Y = Inches(0.700)
+LEAD_H = Inches(0.688)
 
-FOOTER_TEXT = "Confidential All Rights Reserved SALESCORE Inc."
+# コンテンツエリア開始Y
+CONTENT_AREA_Y = Inches(1.4)
+
+# フッターライン
+FOOTER_LINE_Y = Inches(6.951)
+FOOTER_LINE_H = Pt(1.5)
+
+# フッターテキスト・ページ番号
+FOOTER_TEXT_Y = Inches(7.0)
+FOOTER_TEXT_H = Inches(0.25)
+
+FOOTER_TEXT = "Confidential All Rights Reserved SALESCORE Co., Ltd."
+
+# ===== フォントサイズ階層（salescore-pptx-format 準拠）=====
+FONT_SLIDE_TITLE = 21   # スライドタイトル（bold）
+FONT_LEAD        = 18   # リードテキスト
+FONT_BODY        = 16   # ボディ標準（箇条書き）
+FONT_BODY_SUB    = 14   # ボディ補足（サブ箇条書き・テーブル）
+FONT_FOOTER      = 9    # フッターテキスト
+FONT_PAGE_NUM    = 12   # ページ番号
 
 # テーブル行高さ
 TABLE_HEADER_ROW_H = Inches(0.40)
@@ -81,6 +116,7 @@ TABLE_DATA_ROW_H   = Inches(0.35)
 # ─────────────────────────────────────────────
 
 def set_font(run, size, bold=False, color=None, italic=False):
+    run.font.name = FONT_NAME
     run.font.size = Pt(size)
     run.font.bold = bold
     run.font.italic = italic
@@ -123,33 +159,46 @@ def set_cell_bg(cell, color):
 
 def add_logo(slide, logo_path):
     if logo_path and os.path.exists(logo_path):
-        slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, width=LOGO_W)
+        slide.shapes.add_picture(logo_path, LOGO_X, LOGO_Y, width=LOGO_W, height=LOGO_H)
+    else:
+        # フォールバック: テキスト代替
+        tb = slide.shapes.add_textbox(LOGO_X, LOGO_Y, LOGO_W, LOGO_H)
+        tf = tb.text_frame
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.RIGHT
+        r = p.add_run()
+        r.text = "SALESCORE"
+        set_font(r, 16, bold=True, color=COLOR_PRIMARY)
+
+
+def add_header_line(slide):
+    """ヘッダーライン（salescore-pptx-format 実測値）"""
+    add_rect(slide, CONTENT_X, HEADER_LINE_Y, CONTENT_RW, HEADER_LINE_H, COLOR_PRIMARY)
 
 
 def add_footer(slide, page_num=None):
-    """フッターライン + テキスト + ページ番号"""
-    add_rect(slide, 0, FOOTER_LINE_Y, SLIDE_WIDTH, FOOTER_LINE_H, COLOR_BLACK)
+    """フッターライン + テキスト + ページ番号（salescore-pptx-format 実測値）"""
+    add_rect(slide, CONTENT_X, FOOTER_LINE_Y, CONTENT_RW, FOOTER_LINE_H, COLOR_PRIMARY)
 
     tb = slide.shapes.add_textbox(
-        CONTENT_X, FOOTER_LINE_Y + Pt(3), Inches(8), Inches(0.35)
+        CONTENT_X, FOOTER_TEXT_Y, Inches(7.0), FOOTER_TEXT_H
     )
     tf = tb.text_frame
     p = tf.paragraphs[0]
     r = p.add_run()
     r.text = FOOTER_TEXT
-    set_font(r, 8, color=COLOR_GRAY)
+    set_font(r, FONT_FOOTER, color=COLOR_MUTED)
 
     if page_num is not None:
         tb2 = slide.shapes.add_textbox(
-            SLIDE_WIDTH - Inches(0.6), FOOTER_LINE_Y + Pt(3),
-            Inches(0.45), Inches(0.35)
+            Inches(11.5), FOOTER_TEXT_Y, Inches(1.5), FOOTER_TEXT_H
         )
         tf2 = tb2.text_frame
         p2 = tf2.paragraphs[0]
         p2.alignment = PP_ALIGN.RIGHT
         r2 = p2.add_run()
         r2.text = str(page_num)
-        set_font(r2, 9, color=COLOR_GRAY)
+        set_font(r2, FONT_PAGE_NUM, color=COLOR_MUTED)
 
 
 # ─────────────────────────────────────────────
@@ -160,6 +209,7 @@ def render_text_items(slide, items, x, y, w, h):
     """
     bullet / sub_bullet / numbered / text / divider の混在リストを描画。
     divider で分割し、各テキストブロックに高さを等分配する。
+    フォントサイズは salescore-pptx-format 準拠（16pt/14pt）。
     """
     blocks = []
     current_block = []
@@ -182,7 +232,7 @@ def render_text_items(slide, items, x, y, w, h):
     block_y = y
     for block in blocks:
         if block is None:
-            add_rect(slide, x, block_y + Pt(4), w, Pt(1.0), COLOR_GRAY_LIGHT)
+            add_rect(slide, x, block_y + Pt(4), w, Pt(1.0), COLOR_MID_GRAY)
             block_y += DIVIDER_H
         else:
             tb = slide.shapes.add_textbox(x, block_y, w, block_h)
@@ -205,38 +255,38 @@ def render_text_items(slide, items, x, y, w, h):
                     p.space_before = Pt(6)
                     p.space_after  = Pt(2)
                     r_sym = p.add_run()
-                    r_sym.text = "• "
-                    set_font(r_sym, 12, color=COLOR_NAVY)
+                    r_sym.text = "● "
+                    set_font(r_sym, FONT_BODY, color=COLOR_ACCENT)
                     r_txt = p.add_run()
                     r_txt.text = text
-                    set_font(r_txt, 13, color=COLOR_TEXT)
+                    set_font(r_txt, FONT_BODY, color=COLOR_PRIMARY)
 
                 elif itype == 'sub_bullet':
                     p.space_before = Pt(3)
                     p.space_after  = Pt(1)
                     r_sym = p.add_run()
                     r_sym.text = "      – "
-                    set_font(r_sym, 10, color=COLOR_GRAY)
+                    set_font(r_sym, FONT_BODY_SUB, color=COLOR_MUTED)
                     r_txt = p.add_run()
                     r_txt.text = text
-                    set_font(r_txt, 11, color=COLOR_TEXT)
+                    set_font(r_txt, FONT_BODY_SUB, color=COLOR_PRIMARY)
 
                 elif itype == 'numbered':
                     p.space_before = Pt(6)
                     p.space_after  = Pt(2)
                     r_sym = p.add_run()
                     r_sym.text = f"{num}. "
-                    set_font(r_sym, 13, bold=True, color=COLOR_NAVY)
+                    set_font(r_sym, FONT_BODY, bold=True, color=COLOR_ACCENT)
                     r_txt = p.add_run()
                     r_txt.text = text
-                    set_font(r_txt, 13, color=COLOR_TEXT)
+                    set_font(r_txt, FONT_BODY, color=COLOR_PRIMARY)
 
                 else:  # plain text
                     p.space_before = Pt(4)
                     p.space_after  = Pt(2)
                     r_txt = p.add_run()
                     r_txt.text = text
-                    set_font(r_txt, 13, color=COLOR_TEXT)
+                    set_font(r_txt, FONT_BODY, color=COLOR_PRIMARY)
 
             block_y += block_h
 
@@ -274,7 +324,7 @@ def render_table(slide, item, x, y, w):
         p.alignment = PP_ALIGN.CENTER
         r = p.add_run()
         r.text = hdr
-        set_font(r, 11, bold=True, color=COLOR_WHITE)
+        set_font(r, FONT_BODY_SUB, bold=True, color=COLOR_WHITE)
 
     # データ行（ストライプ）
     for i, row_data in enumerate(rows):
@@ -288,7 +338,7 @@ def render_table(slide, item, x, y, w):
             p.alignment = PP_ALIGN.LEFT
             r = p.add_run()
             r.text = cell_text
-            set_font(r, 11, color=COLOR_TEXT)
+            set_font(r, FONT_BODY_SUB, color=COLOR_PRIMARY)
 
     return table_h
 
@@ -314,7 +364,7 @@ def render_columns(slide, item, x, y, w, h):
             p = tf.paragraphs[0]
             r = p.add_run()
             r.text = title_text
-            set_font(r, 13, bold=True, color=COLOR_DARK_NAVY)
+            set_font(r, FONT_BODY_SUB, bold=True, color=COLOR_DARK_NAVY)
 
     # 中央の縦区切り線
     div_x = x + col_w + GAP / 2 - Pt(0.5)
@@ -372,7 +422,7 @@ def make_title_slide(prs, title, subtitle, logo_path, page_num=1):
         p2 = tf2.paragraphs[0]
         r2 = p2.add_run()
         r2.text = subtitle.strip()
-        set_font(r2, 13, color=RGBColor(0xCC, 0xD8, 0xF0))
+        set_font(r2, FONT_BODY_SUB, color=RGBColor(0xCC, 0xD8, 0xF0))
 
     add_logo(slide, logo_path)
     add_footer(slide, page_num)
@@ -400,7 +450,7 @@ def make_section_slide(prs, title, section_num, logo_path, page_num=None):
         p_num = tf_num.paragraphs[0]
         r_num = p_num.add_run()
         r_num.text = section_num
-        set_font(r_num, 11, bold=True, color=COLOR_BLUE)
+        set_font(r_num, 11, bold=True, color=COLOR_ACCENT)
 
     tb = slide.shapes.add_textbox(
         Inches(1.2), center_y - Inches(0.2) if section_num else center_y - Inches(0.4),
@@ -432,52 +482,48 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     add_rect(slide, 0, 0, SLIDE_WIDTH, SLIDE_HEIGHT, COLOR_WHITE)
 
-    # ── タイトルエリア ──
+    # ── タイトルエリア（salescore-pptx-format: y=0.276, 21pt bold）──
     if section_num:
         tb_sec = slide.shapes.add_textbox(
-            TITLE_AREA_X, Inches(0.07), TITLE_AREA_MAX_W, Inches(0.24)
+            TITLE_AREA_X, Inches(0.07), TITLE_AREA_W, Inches(0.20)
         )
         tf_sec = tb_sec.text_frame
         p_sec = tf_sec.paragraphs[0]
         r_sec = p_sec.add_run()
         r_sec.text = section_num
-        set_font(r_sec, 9, bold=True, color=COLOR_SECTION_NUM)
-        main_title_y = Inches(0.27)
-    else:
-        main_title_y = Inches(0.10)
+        set_font(r_sec, 9, bold=True, color=COLOR_MUTED)
 
     tb_title = slide.shapes.add_textbox(
-        TITLE_AREA_X, main_title_y, TITLE_AREA_MAX_W, Inches(0.62)
+        TITLE_AREA_X, TITLE_AREA_Y, TITLE_AREA_W, TITLE_AREA_H
     )
     tf_title = tb_title.text_frame
     tf_title.word_wrap = False
     p_title = tf_title.paragraphs[0]
     r_title = p_title.add_run()
     r_title.text = title
-    set_font(r_title, 26, bold=True, color=COLOR_TEXT)
+    set_font(r_title, FONT_SLIDE_TITLE, bold=True, color=COLOR_PRIMARY)
 
-    # ── ヘッダーライン ──
-    add_rect(slide, 0, HEADER_LINE_Y, SLIDE_WIDTH, HEADER_LINE_H, COLOR_BLACK)
+    # ── ヘッダーライン（salescore-pptx-format: y=0.689）──
+    add_header_line(slide)
 
     # ── コンテンツエリア ──
     lead_items    = [i for i in items if i.get('type') == 'lead']
     content_items = [i for i in items if i.get('type') != 'lead']
 
-    current_y = HEADER_LINE_Y + Inches(0.18)
+    current_y = CONTENT_AREA_Y
 
-    # リード文
+    # リード文（salescore-pptx-format: y=0.700, 18pt）
     if lead_items:
         lead_text = '　'.join(i['text'] for i in lead_items)
         tb_lead = slide.shapes.add_textbox(
-            CONTENT_X, current_y, CONTENT_RW, Inches(0.60)
+            CONTENT_X, LEAD_Y, CONTENT_RW, LEAD_H
         )
         tf_lead = tb_lead.text_frame
         tf_lead.word_wrap = True
         p_lead = tf_lead.paragraphs[0]
         r_lead = p_lead.add_run()
         r_lead.text = lead_text
-        set_font(r_lead, 12, color=COLOR_TEXT)
-        current_y += Inches(0.65)
+        set_font(r_lead, FONT_LEAD, color=COLOR_PRIMARY)
 
     # ── セグメント分割 ──
     # table / columns は独立セグメント、その他はテキストグループにまとめる
