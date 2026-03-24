@@ -53,8 +53,15 @@ def set_font(run, size, bold=False, color=None, italic=False, font_name=None):
         run.font.name = font_name
 
 
+def remove_shadow(shape):
+    """シェイプの影エフェクトを完全に除去"""
+    spPr = shape._element.spPr
+    for el in spPr.findall(qn('a:effectLst')):
+        spPr.remove(el)
+    etree.SubElement(spPr, qn('a:effectLst'))
+
+
 def add_rect(slide, x, y, w, h, color, line_color=None):
-    from pptx.util import Emu
     shape = slide.shapes.add_shape(1, x, y, w, h)
     shape.fill.solid()
     shape.fill.fore_color.rgb = color
@@ -63,6 +70,7 @@ def add_rect(slide, x, y, w, h, color, line_color=None):
         shape.line.width = Pt(1)
     else:
         shape.line.fill.background()
+    remove_shadow(shape)
     return shape
 
 
