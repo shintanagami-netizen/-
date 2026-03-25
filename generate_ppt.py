@@ -124,6 +124,20 @@ def set_font(run, size, bold=False, color=None, italic=False):
         run.font.color.rgb = color
 
 
+def add_inline_text(para, text, size, default_bold=False, default_color=None):
+    """**bold**マークダウンを解析して書式付きRunに変換する"""
+    if not text:
+        return
+    parts = re.split(r'\*\*(.+?)\*\*', text)
+    for i, part in enumerate(parts):
+        if not part:
+            continue
+        r = para.add_run()
+        r.text = part
+        is_bold = default_bold or (i % 2 == 1)  # 奇数インデックス = **...**の中身
+        set_font(r, size, bold=is_bold, color=default_color)
+
+
 def remove_shadow(shape):
     """シェイプ影エフェクトを除去（テーマ継承を上書き）"""
     spPr = shape._element.spPr
@@ -257,9 +271,7 @@ def render_text_items(slide, items, x, y, w, h):
                     r_sym = p.add_run()
                     r_sym.text = "● "
                     set_font(r_sym, FONT_BODY, color=COLOR_ACCENT)
-                    r_txt = p.add_run()
-                    r_txt.text = text
-                    set_font(r_txt, FONT_BODY, color=COLOR_PRIMARY)
+                    add_inline_text(p, text, FONT_BODY, default_color=COLOR_PRIMARY)
 
                 elif itype == 'sub_bullet':
                     p.space_before = Pt(3)
@@ -267,9 +279,7 @@ def render_text_items(slide, items, x, y, w, h):
                     r_sym = p.add_run()
                     r_sym.text = "      – "
                     set_font(r_sym, FONT_BODY_SUB, color=COLOR_MUTED)
-                    r_txt = p.add_run()
-                    r_txt.text = text
-                    set_font(r_txt, FONT_BODY_SUB, color=COLOR_PRIMARY)
+                    add_inline_text(p, text, FONT_BODY_SUB, default_color=COLOR_PRIMARY)
 
                 elif itype == 'numbered':
                     p.space_before = Pt(6)
@@ -277,25 +287,22 @@ def render_text_items(slide, items, x, y, w, h):
                     r_sym = p.add_run()
                     r_sym.text = f"{num}. "
                     set_font(r_sym, FONT_BODY, bold=True, color=COLOR_ACCENT)
-                    r_txt = p.add_run()
-                    r_txt.text = text
-                    set_font(r_txt, FONT_BODY, color=COLOR_PRIMARY)
+                    add_inline_text(p, text, FONT_BODY, default_color=COLOR_PRIMARY)
 
                 else:  # plain text
                     p.space_before = Pt(4)
                     p.space_after  = Pt(2)
-                    r_txt = p.add_run()
-                    r_txt.text = text
-                    set_font(r_txt, FONT_BODY, color=COLOR_PRIMARY)
+                    add_inline_text(p, text, FONT_BODY, default_color=COLOR_PRIMARY)
 
             block_y += block_h
 
 
-def render_table(slide, item, x, y, w):
+def render_table(slide, item, x, y, w, available_h=None):
     """
     テーブルアイテムをpptxテーブルとして描画。
     ヘッダー行: ダークネイビー背景・白太字・中央揃え
-    データ行: ストライプ（薄グレー / 白）
+    データ行: ストライプ（薄グレー / 白）、word_wrap有効
+    available_h指定時は行高さをスケールして空白を埋める
     戻り値: テーブルの高さ
     """
     headers = item.get('headers', [])
@@ -304,9 +311,16 @@ def render_table(slide, item, x, y, w):
     if n_cols == 0:
         return Inches(0)
 
-    n_rows    = len(rows) + 1
-    table_h   = TABLE_HEADER_ROW_H + TABLE_DATA_ROW_H * len(rows)
+    MAX_ROW_H = Inches(1.2)
+    n_data = len(rows)
+    if available_h and n_data > 0:
+        row_h = max(TABLE_DATA_ROW_H, min(MAX_ROW_H, (available_h - TABLE_HEADER_ROW_H) / n_data))
+    else:
+        row_h = TABLE_DATA_ROW_H
 
+    table_h = TABLE_HEADER_ROW_H + row_h * n_data
+
+    n_rows    = n_data + 1
     tbl_shape = slide.shapes.add_table(n_rows, n_cols, x, y, w, table_h)
     tbl = tbl_shape.table
 
@@ -320,25 +334,25 @@ def render_table(slide, item, x, y, w):
     for j, hdr in enumerate(headers):
         cell = tbl.cell(0, j)
         set_cell_bg(cell, COLOR_DARK_NAVY)
-        p = cell.text_frame.paragraphs[0]
+        tf = cell.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
         p.alignment = PP_ALIGN.CENTER
-        r = p.add_run()
-        r.text = hdr
-        set_font(r, FONT_BODY_SUB, bold=True, color=COLOR_WHITE)
+        add_inline_text(p, hdr, FONT_BODY_SUB, default_bold=True, default_color=COLOR_WHITE)
 
     # データ行（ストライプ）
     for i, row_data in enumerate(rows):
-        tbl.rows[i + 1].height = TABLE_DATA_ROW_H
+        tbl.rows[i + 1].height = int(row_h)
         bg = COLOR_STRIPE if i % 2 == 0 else COLOR_WHITE
         for j in range(n_cols):
             cell = tbl.cell(i + 1, j)
             set_cell_bg(cell, bg)
             cell_text = row_data[j] if j < len(row_data) else ''
-            p = cell.text_frame.paragraphs[0]
+            tf = cell.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
             p.alignment = PP_ALIGN.LEFT
-            r = p.add_run()
-            r.text = cell_text
-            set_font(r, FONT_BODY_SUB, color=COLOR_PRIMARY)
+            add_inline_text(p, cell_text, FONT_BODY_SUB, default_color=COLOR_PRIMARY)
 
     return table_h
 
@@ -362,9 +376,7 @@ def render_columns(slide, item, x, y, w, h):
             tb = slide.shapes.add_textbox(col_x, y, col_w, Inches(0.35))
             tf = tb.text_frame
             p = tf.paragraphs[0]
-            r = p.add_run()
-            r.text = title_text
-            set_font(r, FONT_BODY_SUB, bold=True, color=COLOR_DARK_NAVY)
+            add_inline_text(p, title_text, FONT_BODY_SUB, default_bold=True, default_color=COLOR_DARK_NAVY)
 
     # 中央の縦区切り線
     div_x = x + col_w + GAP / 2 - Pt(0.5)
@@ -521,9 +533,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         tf_lead = tb_lead.text_frame
         tf_lead.word_wrap = True
         p_lead = tf_lead.paragraphs[0]
-        r_lead = p_lead.add_run()
-        r_lead.text = lead_text
-        set_font(r_lead, FONT_LEAD, color=COLOR_PRIMARY)
+        add_inline_text(p_lead, lead_text, FONT_LEAD, default_color=COLOR_PRIMARY)
 
     # ── セグメント分割 ──
     # table / columns は独立セグメント、その他はテキストグループにまとめる
@@ -542,16 +552,36 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
 
     available_h = FOOTER_LINE_Y - current_y - Inches(0.1)
 
-    # テーブルの固定高さを先に計算
-    fixed_h = sum(
-        TABLE_HEADER_ROW_H + TABLE_DATA_ROW_H * len(data.get('rows', [])) + Inches(0.12)
-        for seg_type, data in segments
-        if seg_type == 'table'
+    # セグメント集計（dividerのみのtextはvar扱いしない）
+    n_tables = sum(1 for t, _ in segments if t == 'table')
+    n_var    = sum(
+        1 for t, d in segments
+        if t in ('text', 'columns')
+        and not all(item.get('type') == 'divider' for item in (d if isinstance(d, list) else []))
     )
 
-    # 残り高さをテキスト/カラムセグメントで等分
-    n_var = sum(1 for t, _ in segments if t in ('text', 'columns'))
-    var_h = (available_h - fixed_h) / max(n_var, 1) if n_var else available_h
+    MIN_VAR_H = Inches(0.7)   # テキスト/カラムセグメント1つの最小高さ
+    MAX_ROW_H = Inches(1.2)   # テーブル行高さの上限
+
+    gap_total = Inches(0.12) * max(n_tables - 1, 0)
+    min_var_budget = MIN_VAR_H * n_var
+
+    if n_tables > 0:
+        table_budget = available_h - min_var_budget - gap_total
+        per_table_h  = max(Inches(1.0), table_budget / n_tables)
+    else:
+        per_table_h = None
+
+    # テキスト/カラムに残りを等分
+    if n_var > 0:
+        used_by_tables = sum(
+            min(MAX_ROW_H * len(data.get('rows', [])) + TABLE_HEADER_ROW_H, per_table_h)
+            for seg_type, data in segments if seg_type == 'table'
+        ) + gap_total if n_tables > 0 else 0
+        var_h = (available_h - used_by_tables) / n_var
+        var_h = max(var_h, MIN_VAR_H)
+    else:
+        var_h = available_h
 
     # ── セグメント描画 ──
     y = current_y
@@ -560,7 +590,8 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
             render_text_items(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
             y += var_h
         elif seg_type == 'table':
-            h = render_table(slide, seg_data, CONTENT_X, y, CONTENT_RW)
+            tbl_avail = per_table_h if per_table_h else None
+            h = render_table(slide, seg_data, CONTENT_X, y, CONTENT_RW, available_h=tbl_avail)
             y += h + Inches(0.12)
         elif seg_type == 'columns':
             render_columns(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
