@@ -881,6 +881,13 @@ def parse_markdown(md_text):
             }
             col_side = None
 
+        # ── ::cards ブロック開始 ──
+        elif line.startswith('::cards'):
+            flush_table()
+            card_mode  = True
+            card_cur   = None
+            cards_list = []
+
         # ── 2カラムレイアウト ──
         elif line.startswith('::left'):
             col_side  = 'left'
@@ -910,6 +917,13 @@ def parse_markdown(md_text):
 
         elif line == ':::':
             col_side = None
+
+        # ── バナー（>> text）──
+        elif line.startswith('>> '):
+            flush_table()
+            text = line[3:].strip()
+            if current and current.get('type') == 'content':
+                _append_item({'type': 'banner', 'text': text})
 
         # ── リード文（> blockquote）──
         elif line.startswith('> '):
