@@ -357,6 +357,98 @@ def render_table(slide, item, x, y, w, available_h=None):
     return table_h
 
 
+def render_card_grid(slide, item, x, y, w, h):
+    """
+    カードグリッドを描画。
+    N枚のカードを横に並べる。各カードにはカラー帯・アイコン・タイトル・本文。
+    """
+    cards = item.get('cards', [])
+    if not cards:
+        return
+    N = len(cards)
+    gap = int(Inches(0.25))
+    card_w = (int(w) - gap * (N - 1)) // N
+    card_h = int(h)
+
+    for idx, card in enumerate(cards):
+        cx = int(x) + idx * (card_w + gap)
+
+        # 背景（薄グレー）
+        bg = add_rect(slide, cx, int(y), card_w, card_h, COLOR_LIGHT_GRAY)
+        remove_shadow(bg)
+
+        # 上部アクセントストリップ
+        strip_h = int(Pt(8))
+        strip = add_rect(slide, cx, int(y), card_w, strip_h, card['color'])
+        remove_shadow(strip)
+
+        # アイコン（円）
+        icon_d = int(Inches(0.5))
+        icon_x = cx + (card_w - icon_d) // 2
+        icon_y = int(y) + strip_h + int(Inches(0.15))
+        oval = slide.shapes.add_shape(9, icon_x, icon_y, icon_d, icon_d)
+        oval.fill.solid()
+        oval.fill.fore_color.rgb = card['color']
+        oval.line.fill.background()
+        remove_shadow(oval)
+
+        # アイコンラベル（白・太字・10pt）
+        tf_oval = oval.text_frame
+        tf_oval.word_wrap = False
+        p_oval = tf_oval.paragraphs[0]
+        p_oval.alignment = PP_ALIGN.CENTER
+        r_oval = p_oval.add_run()
+        r_oval.text = card.get('label', '')
+        set_font(r_oval, 10, bold=True, color=COLOR_WHITE)
+
+        # タイトルテキスト
+        title_y = icon_y + icon_d + int(Inches(0.1))
+        title_h = int(Inches(0.5))
+        padding = int(Inches(0.12))
+        tb_title = slide.shapes.add_textbox(cx + padding, title_y, card_w - padding * 2, title_h)
+        tf_title = tb_title.text_frame
+        tf_title.word_wrap = True
+        p_title = tf_title.paragraphs[0]
+        p_title.alignment = PP_ALIGN.CENTER
+        r_title = p_title.add_run()
+        r_title.text = card.get('title', '')
+        set_font(r_title, 14, bold=True, color=COLOR_PRIMARY)
+        remove_shadow(tb_title)
+
+        # 本文テキスト
+        body_y = title_y + title_h
+        body_h = int(y) + card_h - body_y
+        tb_body = slide.shapes.add_textbox(cx + padding, body_y, card_w - padding * 2, body_h)
+        tf_body = tb_body.text_frame
+        tf_body.word_wrap = True
+        p_body = tf_body.paragraphs[0]
+        p_body.alignment = PP_ALIGN.CENTER
+        r_body = p_body.add_run()
+        r_body.text = card.get('body', '')
+        set_font(r_body, 12, color=COLOR_MUTED)
+        remove_shadow(tb_body)
+
+
+def render_banner(slide, item, x, y, w):
+    """
+    バナーを描画（ダークネイビー背景・白テキスト・14pt中央揃え）。
+    戻り値: バナーの高さ（int EMU）
+    """
+    banner_h = int(Inches(0.55))
+    bg = add_rect(slide, int(x), int(y), int(w), banner_h, COLOR_DARK_NAVY)
+    remove_shadow(bg)
+
+    tb = slide.shapes.add_textbox(int(x) + int(Inches(0.2)), int(y), int(w) - int(Inches(0.4)), banner_h)
+    tf = tb.text_frame
+    tf.word_wrap = True
+    p = tf.paragraphs[0]
+    p.alignment = PP_ALIGN.CENTER
+    add_inline_text(p, item.get('text', ''), 14, default_color=COLOR_WHITE)
+    remove_shadow(tb)
+
+    return banner_h
+
+
 def render_columns(slide, item, x, y, w, h):
     """
     2カラムレイアウトを描画。
@@ -535,12 +627,20 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         p_lead = tf_lead.paragraphs[0]
         add_inline_text(p_lead, lead_text, FONT_LEAD, default_color=COLOR_PRIMARY)
 
+    # ── バナーを先に抽出 ──
+    banner_items  = [i for i in content_items if i.get('type') == 'banner']
+    content_items = [i for i in content_items if i.get('type') != 'banner']
+
+    BANNER_H   = int(Inches(0.55))
+    BANNER_GAP = int(Inches(0.08))
+    banner_reserved = len(banner_items) * (BANNER_H + BANNER_GAP)
+
     # ── セグメント分割 ──
-    # table / columns は独立セグメント、その他はテキストグループにまとめる
+    # table / columns / cards は独立セグメント、その他はテキストグループにまとめる
     segments = []
     text_buffer = []
     for item in content_items:
-        if item.get('type') in ('table', 'columns'):
+        if item.get('type') in ('table', 'columns', 'cards'):
             if text_buffer:
                 segments.append(('text', list(text_buffer)))
                 text_buffer = []
@@ -550,7 +650,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     if text_buffer:
         segments.append(('text', text_buffer))
 
-    available_h = int(FOOTER_LINE_Y - current_y - Inches(0.1))
+    available_h = int(FOOTER_LINE_Y - current_y - Inches(0.1)) - banner_reserved
 
     # セグメント集計
     # dividerのみのtextセグメントはvar扱いしない（高さを消費しない）
@@ -562,7 +662,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     n_tables = sum(1 for t, _ in segments if t == 'table')
     n_var    = sum(
         1 for t, d in segments
-        if t in ('text', 'columns') and not is_divider_only(d)
+        if t in ('text', 'columns', 'cards') and not is_divider_only(d)
     )
 
     MIN_VAR_H = int(Inches(0.7))   # テキスト/カラムセグメント1つの最小高さ
@@ -613,6 +713,16 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         elif seg_type == 'columns':
             render_columns(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
             y += var_h
+        elif seg_type == 'cards':
+            render_card_grid(slide, seg_data, int(CONTENT_X), int(y), int(CONTENT_RW), int(var_h))
+            y += var_h
+
+    # ── バナー描画（フッターラインの直上から上方向へ）──
+    if banner_items:
+        banner_y = int(FOOTER_LINE_Y) - BANNER_GAP - BANNER_H
+        for b_item in reversed(banner_items):
+            render_banner(slide, b_item, CONTENT_X, banner_y, CONTENT_RW)
+            banner_y -= (BANNER_H + BANNER_GAP)
 
     add_logo(slide, logo_path)
     add_footer(slide, page_num)
@@ -636,6 +746,9 @@ def parse_markdown(md_text):
     col_side      = None   # None | 'left' | 'right'
     table_header  = None   # 保留中のテーブルヘッダー行
     table_active  = None   # 処理中のテーブルアイテム
+    card_mode     = False  # ::cards ブロック内かどうか
+    card_cur      = None   # 現在処理中のカード辞書
+    cards_list    = None   # 現在の::cardsブロックのカードリスト
 
     def flush_table():
         nonlocal table_header, table_active
@@ -679,6 +792,54 @@ def parse_markdown(md_text):
 
         # テーブル以外の行が来たらテーブルを確定
         flush_table()
+
+        # ── ::cards ブロック内の処理 ──
+        if card_mode:
+            if line == ':::':
+                # カードブロック終了
+                card_mode_local = True  # will reset below
+                nonlocal_card_mode = False
+                if card_cur is not None:
+                    cards_list.append(card_cur)
+                if current and current.get('type') == 'content':
+                    current['items'].append({'type': 'cards', 'cards': cards_list})
+                # reset card state in outer scope via reassignment trick
+                # We use a mutable approach: set flags via the variables directly
+                # (done after continue)
+            elif re.match(r'^\[(.+?)\]\s*#([0-9A-Fa-f]{6})$', line):
+                # 新しいカード開始
+                if card_cur is not None:
+                    cards_list.append(card_cur)
+                m = re.match(r'^\[(.+?)\]\s*#([0-9A-Fa-f]{6})$', line)
+                label = m.group(1)
+                hex_color = m.group(2)
+                r_val = int(hex_color[0:2], 16)
+                g_val = int(hex_color[2:4], 16)
+                b_val = int(hex_color[4:6], 16)
+                card_cur = {
+                    'label': label,
+                    'color': RGBColor(r_val, g_val, b_val),
+                    'title': None,
+                    'body': '',
+                }
+                continue
+            else:
+                # タイトルまたは本文
+                if card_cur is not None:
+                    if card_cur['title'] is None:
+                        card_cur['title'] = line
+                    else:
+                        if card_cur['body']:
+                            card_cur['body'] += ' ' + line
+                        else:
+                            card_cur['body'] = line
+                continue
+            # Handle ':::' close for card_mode
+            if line == ':::':
+                card_mode = False
+                card_cur = None
+                cards_list = None
+                continue
 
         # ── H3 → セクション区切りスライド ──
         if line.startswith('### '):
