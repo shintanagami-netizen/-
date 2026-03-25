@@ -311,14 +311,14 @@ def render_table(slide, item, x, y, w, available_h=None):
     if n_cols == 0:
         return Inches(0)
 
-    MAX_ROW_H = Inches(1.2)
+    MAX_ROW_H = int(Inches(1.2))
     n_data = len(rows)
     if available_h and n_data > 0:
-        row_h = max(TABLE_DATA_ROW_H, min(MAX_ROW_H, (available_h - TABLE_HEADER_ROW_H) / n_data))
+        row_h = max(int(TABLE_DATA_ROW_H), min(MAX_ROW_H, (int(available_h) - int(TABLE_HEADER_ROW_H)) // n_data))
     else:
-        row_h = TABLE_DATA_ROW_H
+        row_h = int(TABLE_DATA_ROW_H)
 
-    table_h = TABLE_HEADER_ROW_H + row_h * n_data
+    table_h = int(TABLE_HEADER_ROW_H) + row_h * n_data
 
     n_rows    = n_data + 1
     tbl_shape = slide.shapes.add_table(n_rows, n_cols, x, y, w, table_h)
@@ -550,35 +550,47 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     if text_buffer:
         segments.append(('text', text_buffer))
 
-    available_h = FOOTER_LINE_Y - current_y - Inches(0.1)
+    available_h = int(FOOTER_LINE_Y - current_y - Inches(0.1))
 
-    # セグメント集計（dividerのみのtextはvar扱いしない）
+    # セグメント集計
+    # dividerのみのtextセグメントはvar扱いしない（高さを消費しない）
+    def is_divider_only(seg_data):
+        return isinstance(seg_data, list) and all(
+            item.get('type') == 'divider' for item in seg_data
+        )
+
     n_tables = sum(1 for t, _ in segments if t == 'table')
     n_var    = sum(
         1 for t, d in segments
-        if t in ('text', 'columns')
-        and not all(item.get('type') == 'divider' for item in (d if isinstance(d, list) else []))
+        if t in ('text', 'columns') and not is_divider_only(d)
     )
 
-    MIN_VAR_H = Inches(0.7)   # テキスト/カラムセグメント1つの最小高さ
-    MAX_ROW_H = Inches(1.2)   # テーブル行高さの上限
+    MIN_VAR_H = int(Inches(0.7))   # テキスト/カラムセグメント1つの最小高さ
+    MAX_ROW_H = int(Inches(1.2))   # テーブル行高さの上限
+    DIV_SEG_H = int(Inches(0.18))  # divider-onlyセグメントの高さ
 
-    gap_total = Inches(0.12) * max(n_tables - 1, 0)
+    gap_total = int(Inches(0.12)) * max(n_tables - 1, 0)
     min_var_budget = MIN_VAR_H * n_var
 
     if n_tables > 0:
         table_budget = available_h - min_var_budget - gap_total
-        per_table_h  = max(Inches(1.0), table_budget / n_tables)
+        per_table_h  = max(int(Inches(1.0)), table_budget // n_tables)
     else:
         per_table_h = None
 
-    # テキスト/カラムに残りを等分
+    # テキスト/カラムに残りを等分（整数除算）
+    TABLE_GAP = int(Inches(0.12))
     if n_var > 0:
-        used_by_tables = sum(
-            min(MAX_ROW_H * len(data.get('rows', [])) + TABLE_HEADER_ROW_H, per_table_h)
-            for seg_type, data in segments if seg_type == 'table'
-        ) + gap_total if n_tables > 0 else 0
-        var_h = (available_h - used_by_tables) / n_var
+        if n_tables > 0 and per_table_h:
+            # テーブル高さ + 各テーブル後のギャップ（最後のテーブルの後も含む）
+            actual_table_used = sum(
+                min(MAX_ROW_H * len(data.get('rows', [])) + int(TABLE_HEADER_ROW_H), per_table_h)
+                for seg_type, data in segments if seg_type == 'table'
+            ) + TABLE_GAP * n_tables
+        else:
+            actual_table_used = 0
+        n_div_segs = sum(1 for t, d in segments if t == 'text' and is_divider_only(d))
+        var_h = (available_h - actual_table_used - DIV_SEG_H * n_div_segs) // n_var
         var_h = max(var_h, MIN_VAR_H)
     else:
         var_h = available_h
@@ -587,12 +599,17 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     y = current_y
     for seg_type, seg_data in segments:
         if seg_type == 'text':
-            render_text_items(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
-            y += var_h
+            if is_divider_only(seg_data):
+                # divider-onlyは小さな固定高さで処理
+                render_text_items(slide, seg_data, CONTENT_X, y, CONTENT_RW, DIV_SEG_H)
+                y += DIV_SEG_H
+            else:
+                render_text_items(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
+                y += var_h
         elif seg_type == 'table':
             tbl_avail = per_table_h if per_table_h else None
             h = render_table(slide, seg_data, CONTENT_X, y, CONTENT_RW, available_h=tbl_avail)
-            y += h + Inches(0.12)
+            y += int(h) + int(Inches(0.12))
         elif seg_type == 'columns':
             render_columns(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
             y += var_h
