@@ -357,6 +357,9 @@ def render_table(slide, item, x, y, w, available_h=None):
     return table_h
 
 
+_CARD_PALETTE = [COLOR_DARK_NAVY, COLOR_NAVY, COLOR_ACCENT]
+
+
 def render_card_grid(slide, item, x, y, w, h):
     """
     カードグリッドを描画。
@@ -372,6 +375,7 @@ def render_card_grid(slide, item, x, y, w, h):
 
     for idx, card in enumerate(cards):
         cx = int(x) + idx * (card_w + gap)
+        accent = _CARD_PALETTE[idx % len(_CARD_PALETTE)]
 
         # 背景（薄グレー）
         bg = add_rect(slide, cx, int(y), card_w, card_h, COLOR_LIGHT_GRAY)
@@ -379,7 +383,7 @@ def render_card_grid(slide, item, x, y, w, h):
 
         # 上部アクセントストリップ
         strip_h = int(Pt(8))
-        strip = add_rect(slide, cx, int(y), card_w, strip_h, card['color'])
+        strip = add_rect(slide, cx, int(y), card_w, strip_h, accent)
         remove_shadow(strip)
 
         # アイコン（円）
@@ -388,7 +392,7 @@ def render_card_grid(slide, item, x, y, w, h):
         icon_y = int(y) + strip_h + int(Inches(0.15))
         oval = slide.shapes.add_shape(9, icon_x, icon_y, icon_d, icon_d)
         oval.fill.solid()
-        oval.fill.fore_color.rgb = card['color']
+        oval.fill.fore_color.rgb = accent
         oval.line.fill.background()
         remove_shadow(oval)
 
@@ -425,7 +429,7 @@ def render_card_grid(slide, item, x, y, w, h):
         p_body.alignment = PP_ALIGN.CENTER
         r_body = p_body.add_run()
         r_body.text = card.get('body', '')
-        set_font(r_body, 12, color=COLOR_MUTED)
+        set_font(r_body, FONT_BODY_SUB, color=COLOR_MUTED)
         remove_shadow(tb_body)
 
 
@@ -806,19 +810,14 @@ def parse_markdown(md_text):
                 # reset card state in outer scope via reassignment trick
                 # We use a mutable approach: set flags via the variables directly
                 # (done after continue)
-            elif re.match(r'^\[(.+?)\]\s*#([0-9A-Fa-f]{6})$', line):
-                # 新しいカード開始
+            elif re.match(r'^\[(.+?)\](?:\s*#[0-9A-Fa-f]{6})?$', line):
+                # 新しいカード開始（カラーコードは任意・無視してパレット自動選択）
                 if card_cur is not None:
                     cards_list.append(card_cur)
-                m = re.match(r'^\[(.+?)\]\s*#([0-9A-Fa-f]{6})$', line)
+                m = re.match(r'^\[(.+?)\]', line)
                 label = m.group(1)
-                hex_color = m.group(2)
-                r_val = int(hex_color[0:2], 16)
-                g_val = int(hex_color[2:4], 16)
-                b_val = int(hex_color[4:6], 16)
                 card_cur = {
                     'label': label,
-                    'color': RGBColor(r_val, g_val, b_val),
                     'title': None,
                     'body': '',
                 }
