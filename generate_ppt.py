@@ -521,41 +521,82 @@ def render_logic_table(slide, item, x, y, w, available_h=None):
 
 def render_flow_banner(slide, item, x, y, w):
     """
-    収束フローバナー:
-      [KW1] → [KW2] → [KW3]
-                  ↓
-      [帰着点テキスト（ダークネイビー背景）]
+    改良版収束フローバナー:
+      [①KW1/sub] → [②KW2/sub] → [③KW3/sub]
+                    ↓  3つの課題が収束
+      [▶ 帰着点 | 大きいキャッチ | 補足（muted）]（青枠）
     戻り値: 合計高さ（int EMU）
     """
-    keywords   = item.get('keywords', [])
+    keywords   = item.get('keywords', [])  # "main/sub" or "main"
     conclusion = item.get('conclusion', '')
     n = len(keywords)
 
-    kw_h   = int(Inches(0.42))
-    arr_h  = int(Inches(0.28))
-    conc_h = int(Inches(0.45))
+    # カラー定数（このバナー専用）
+    COLOR_LB       = RGBColor(0x4A, 0x9E, 0xFF)   # #4A9EFF 水色
+    COLOR_BADGE_BG = RGBColor(0x28, 0x4F, 0x88)   # rgba(74,158,255,0.25) on navy近似
+    COLOR_MUTED_W  = RGBColor(0xBB, 0xC2, 0xD0)   # white 70% on navy近似
+
+    BADGE_NUMS = ['①', '②', '③', '④']
+
+    kw_h    = int(Inches(0.62))
+    arr_h   = int(Inches(0.36))
+    conc_h  = int(Inches(0.65))
     total_h = kw_h + arr_h + conc_h
 
+    # ── キーワードボックス ──
     if n > 0:
         arrow_w = int(Inches(0.32))
         kw_w = (int(w) - arrow_w * (n - 1)) // n
 
-        for i, kw in enumerate(keywords):
+        for i, kw_raw in enumerate(keywords):
             kx = int(x) + i * (kw_w + arrow_w)
-            # キーワードボックス
-            bg_kw = add_rect(slide, kx, int(y), kw_w, kw_h, COLOR_DARK_NAVY)
-            remove_shadow(bg_kw)
+            main_kw, sub_kw = (kw_raw.split('/', 1) + [''])[:2]
+            main_kw = main_kw.strip()
+            sub_kw  = sub_kw.strip()
+
+            # 背景ボックス
+            add_rect(slide, kx, int(y), kw_w, kw_h, COLOR_DARK_NAVY)
+
+            # バッジ（小さい円）
+            badge_d = int(Inches(0.20))
+            badge_x = kx + int(Inches(0.07))
+            badge_y = int(y) + int(Inches(0.07))
+            badge = slide.shapes.add_shape(9, badge_x, badge_y, badge_d, badge_d)
+            badge.fill.solid()
+            badge.fill.fore_color.rgb = COLOR_BADGE_BG
+            badge.line.fill.background()
+            remove_shadow(badge)
+            tf_b = badge.text_frame
+            tf_b.word_wrap = False
+            p_b = tf_b.paragraphs[0]
+            p_b.alignment = PP_ALIGN.CENTER
+            p_b.space_before = Pt(1)
+            r_b = p_b.add_run()
+            r_b.text = BADGE_NUMS[i] if i < len(BADGE_NUMS) else str(i + 1)
+            set_font(r_b, 12, bold=True, color=COLOR_LB)
+
+            # メイン＋サブテキストボックス
+            pad = int(Inches(0.08))
             tb_kw = slide.shapes.add_textbox(
-                kx + int(Inches(0.06)), int(y), kw_w - int(Inches(0.12)), kw_h
+                kx + pad, int(y) + badge_d + int(Inches(0.10)),
+                kw_w - pad * 2, kw_h - badge_d - int(Inches(0.14))
             )
             tf_kw = tb_kw.text_frame
             tf_kw.word_wrap = True
-            p_kw = tf_kw.paragraphs[0]
-            p_kw.alignment = PP_ALIGN.CENTER
-            r_kw = p_kw.add_run()
-            r_kw.text = kw
-            set_font(r_kw, 13, bold=True, color=COLOR_WHITE)
+            p_main = tf_kw.paragraphs[0]
+            p_main.alignment = PP_ALIGN.CENTER
+            r_main = p_main.add_run()
+            r_main.text = main_kw
+            set_font(r_main, 12, bold=True, color=COLOR_WHITE)
             remove_shadow(tb_kw)
+
+            if sub_kw:
+                p_sub = tf_kw.add_paragraph()
+                p_sub.alignment = PP_ALIGN.CENTER
+                p_sub.space_before = Pt(2)
+                r_sub = p_sub.add_run()
+                r_sub.text = sub_kw
+                set_font(r_sub, 12, color=COLOR_MUTED_W)
 
             # 横矢印（最後以外）
             if i < n - 1:
@@ -564,36 +605,78 @@ def render_flow_banner(slide, item, x, y, w):
                 tf_a.word_wrap = False
                 p_a = tf_a.paragraphs[0]
                 p_a.alignment = PP_ALIGN.CENTER
+                p_a.space_before = Pt(10)
                 r_a = p_a.add_run()
                 r_a.text = '→'
                 set_font(r_a, 14, bold=True, color=COLOR_ACCENT)
                 remove_shadow(tb_a)
 
-    # 下矢印（中央）
-    cx = int(x) + int(w) // 2 - int(Inches(0.15))
-    tb_dn = slide.shapes.add_textbox(cx, int(y) + kw_h, int(Inches(0.3)), arr_h)
+    # ── 下矢印＋ラベル ──
+    arr_center_x = int(x) + int(w) // 2 - int(Inches(0.6))
+    tb_dn = slide.shapes.add_textbox(arr_center_x, int(y) + kw_h, int(Inches(1.2)), arr_h)
     tf_dn = tb_dn.text_frame
+    tf_dn.word_wrap = False
     p_dn = tf_dn.paragraphs[0]
     p_dn.alignment = PP_ALIGN.CENTER
     r_dn = p_dn.add_run()
     r_dn.text = '↓'
-    set_font(r_dn, 14, bold=True, color=COLOR_ACCENT)
+    set_font(r_dn, 20, bold=True, color=COLOR_ACCENT)
+    p_label = tf_dn.add_paragraph()
+    p_label.alignment = PP_ALIGN.CENTER
+    r_label = p_label.add_run()
+    r_label.text = '3つの課題が収束'
+    set_font(r_label, 12, color=COLOR_LB)
     remove_shadow(tb_dn)
 
-    # 帰着点ボックス
+    # ── 帰着点ボックス（青枠）──
     conc_y = int(y) + kw_h + arr_h
-    bg_c = add_rect(slide, int(x), conc_y, int(w), conc_h, COLOR_DARK_NAVY)
-    remove_shadow(bg_c)
-    tb_c = slide.shapes.add_textbox(
-        int(x) + int(Inches(0.2)), conc_y, int(w) - int(Inches(0.4)), conc_h
-    )
-    tf_c = tb_c.text_frame
-    tf_c.word_wrap = True
-    p_c = tf_c.paragraphs[0]
-    p_c.alignment = PP_ALIGN.CENTER
-    add_inline_text(p_c, conclusion, FONT_BODY_SUB, default_color=COLOR_WHITE)
-    remove_shadow(tb_c)
 
+    # 結論テキスト分解: **...**がメインキャッチ、残りが補足
+    bold_m = re.search(r'\*\*(.+?)\*\*', conclusion)
+    if bold_m:
+        conc_main = bold_m.group(1)
+        conc_rest = re.sub(r'帰着点[：:]\s*', '', conclusion)
+        conc_rest = re.sub(r'\*\*.+?\*\*', '', conc_rest).strip().strip('　').strip()
+    else:
+        conc_main = re.sub(r'^帰着点[：:]\s*', '', conclusion)
+        conc_rest = ''
+
+    add_rect(slide, int(x), conc_y, int(w), conc_h, COLOR_DARK_NAVY,
+             line_color=COLOR_LB, line_w=Pt(2))
+
+    pad_x = int(Inches(0.18))
+    tb_conc = slide.shapes.add_textbox(
+        int(x) + pad_x, conc_y + int(Inches(0.06)),
+        int(w) - pad_x * 2, conc_h - int(Inches(0.08))
+    )
+    tf_conc = tb_conc.text_frame
+    tf_conc.word_wrap = True
+
+    # 「▶ 帰着点」ラベル
+    p_lbl = tf_conc.paragraphs[0]
+    p_lbl.alignment = PP_ALIGN.CENTER
+    r_lbl = p_lbl.add_run()
+    r_lbl.text = '▶  帰着点'
+    set_font(r_lbl, 12, bold=True, color=COLOR_LB)
+
+    # メインキャッチ（16pt bold）
+    p_mc = tf_conc.add_paragraph()
+    p_mc.alignment = PP_ALIGN.CENTER
+    p_mc.space_before = Pt(3)
+    r_mc = p_mc.add_run()
+    r_mc.text = conc_main
+    set_font(r_mc, 16, bold=True, color=COLOR_WHITE)
+
+    # 補足テキスト（muted）
+    if conc_rest:
+        p_cs = tf_conc.add_paragraph()
+        p_cs.alignment = PP_ALIGN.CENTER
+        p_cs.space_before = Pt(2)
+        r_cs = p_cs.add_run()
+        r_cs.text = conc_rest
+        set_font(r_cs, 12, color=COLOR_MUTED_W)
+
+    remove_shadow(tb_conc)
     return total_h
 
 
@@ -799,7 +882,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     banner_items  = [i for i in content_items if i.get('type') in ('banner', 'flow_banner')]
     content_items = [i for i in content_items if i.get('type') not in ('banner', 'flow_banner')]
 
-    FLOW_BANNER_H = int(Inches(0.42) + Inches(0.28) + Inches(0.45))  # kw+arr+conc
+    FLOW_BANNER_H = int(Inches(0.62) + Inches(0.36) + Inches(0.65))  # kw+arr+conc
     BANNER_H   = int(Inches(0.55))
     BANNER_GAP = int(Inches(0.08))
 
