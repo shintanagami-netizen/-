@@ -433,6 +433,170 @@ def render_card_grid(slide, item, x, y, w, h):
         remove_shadow(tb_body)
 
 
+def render_logic_table(slide, item, x, y, w, available_h=None):
+    """
+    3列ロジックテーブル（FACT / WHY / INSIGHT）。
+    列間に「→」矢印をオーバーレイ。WHY列ヘッダーは淡いネイビー。
+    INSIGHT列は「見出し｜補足」形式をBold+通常に分けてレンダリング。
+    """
+    headers = item.get('headers', [])
+    rows    = item.get('rows', [])
+    n_data  = len(rows)
+    if n_data == 0:
+        return Inches(0)
+
+    # 列幅: FACT 30% / WHY 38% / INSIGHT 32%
+    fact_w = int(w * 0.30)
+    why_w  = int(w * 0.38)
+    ins_w  = int(w) - fact_w - why_w
+
+    MAX_ROW_H = int(Inches(1.5))
+    if available_h and n_data > 0:
+        row_h = max(int(TABLE_DATA_ROW_H), min(MAX_ROW_H, (int(available_h) - int(TABLE_HEADER_ROW_H)) // n_data))
+    else:
+        row_h = int(TABLE_DATA_ROW_H)
+
+    table_h = int(TABLE_HEADER_ROW_H) + row_h * n_data
+
+    tbl_shape = slide.shapes.add_table(n_data + 1, 3, x, y, w, table_h)
+    tbl = tbl_shape.table
+    tbl.columns[0].width = fact_w
+    tbl.columns[1].width = why_w
+    tbl.columns[2].width = ins_w
+
+    # ヘッダー行
+    tbl.rows[0].height = TABLE_HEADER_ROW_H
+    hdr_colors = [COLOR_DARK_NAVY, COLOR_NAVY, COLOR_DARK_NAVY]
+    for j, (hdr, hdr_col) in enumerate(zip(headers, hdr_colors)):
+        cell = tbl.cell(0, j)
+        set_cell_bg(cell, hdr_col)
+        tf = cell.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.alignment = PP_ALIGN.CENTER
+        add_inline_text(p, hdr, FONT_BODY_SUB, default_bold=True, default_color=COLOR_WHITE)
+
+    # データ行
+    for i, row_data in enumerate(rows):
+        tbl.rows[i + 1].height = int(row_h)
+        bg = COLOR_STRIPE if i % 2 == 0 else COLOR_WHITE
+        for j in range(3):
+            cell = tbl.cell(i + 1, j)
+            set_cell_bg(cell, bg)
+            cell_text = row_data[j] if j < len(row_data) else ''
+            tf = cell.text_frame
+            tf.word_wrap = True
+            p = tf.paragraphs[0]
+            p.alignment = PP_ALIGN.LEFT
+            # INSIGHT列: 「見出し｜補足」を2パラグラフに分割
+            if j == 2 and '｜' in cell_text:
+                head, rest = cell_text.split('｜', 1)
+                add_inline_text(p, f'**{head.strip()}**', FONT_BODY_SUB, default_color=COLOR_PRIMARY)
+                p2 = tf.add_paragraph()
+                p2.space_before = Pt(4)
+                add_inline_text(p2, rest.strip(), FONT_BODY_SUB, default_color=COLOR_PRIMARY)
+            else:
+                add_inline_text(p, cell_text, FONT_BODY_SUB, default_color=COLOR_PRIMARY)
+
+    # 列間「→」矢印オーバーレイ（各データ行の中央）
+    col_boundaries = [x + fact_w, x + fact_w + why_w]
+    for i in range(n_data):
+        row_y = y + int(TABLE_HEADER_ROW_H) + i * row_h
+        for ax in col_boundaries:
+            tb_arr = slide.shapes.add_textbox(
+                ax - int(Inches(0.18)), row_y, int(Inches(0.36)), row_h
+            )
+            tf_arr = tb_arr.text_frame
+            tf_arr.word_wrap = False
+            p_arr = tf_arr.paragraphs[0]
+            p_arr.alignment = PP_ALIGN.CENTER
+            p_arr.space_before = Pt(row_h / 914400 * 72 * 0.35)  # 垂直中央寄せ近似
+            r_arr = p_arr.add_run()
+            r_arr.text = '→'
+            set_font(r_arr, 16, bold=True, color=COLOR_ACCENT)
+            remove_shadow(tb_arr)
+
+    return table_h
+
+
+def render_flow_banner(slide, item, x, y, w):
+    """
+    収束フローバナー:
+      [KW1] → [KW2] → [KW3]
+                  ↓
+      [帰着点テキスト（ダークネイビー背景）]
+    戻り値: 合計高さ（int EMU）
+    """
+    keywords   = item.get('keywords', [])
+    conclusion = item.get('conclusion', '')
+    n = len(keywords)
+
+    kw_h   = int(Inches(0.42))
+    arr_h  = int(Inches(0.28))
+    conc_h = int(Inches(0.45))
+    total_h = kw_h + arr_h + conc_h
+
+    if n > 0:
+        arrow_w = int(Inches(0.32))
+        kw_w = (int(w) - arrow_w * (n - 1)) // n
+
+        for i, kw in enumerate(keywords):
+            kx = int(x) + i * (kw_w + arrow_w)
+            # キーワードボックス
+            bg_kw = add_rect(slide, kx, int(y), kw_w, kw_h, COLOR_DARK_NAVY)
+            remove_shadow(bg_kw)
+            tb_kw = slide.shapes.add_textbox(
+                kx + int(Inches(0.06)), int(y), kw_w - int(Inches(0.12)), kw_h
+            )
+            tf_kw = tb_kw.text_frame
+            tf_kw.word_wrap = True
+            p_kw = tf_kw.paragraphs[0]
+            p_kw.alignment = PP_ALIGN.CENTER
+            r_kw = p_kw.add_run()
+            r_kw.text = kw
+            set_font(r_kw, 13, bold=True, color=COLOR_WHITE)
+            remove_shadow(tb_kw)
+
+            # 横矢印（最後以外）
+            if i < n - 1:
+                tb_a = slide.shapes.add_textbox(kx + kw_w, int(y), arrow_w, kw_h)
+                tf_a = tb_a.text_frame
+                tf_a.word_wrap = False
+                p_a = tf_a.paragraphs[0]
+                p_a.alignment = PP_ALIGN.CENTER
+                r_a = p_a.add_run()
+                r_a.text = '→'
+                set_font(r_a, 14, bold=True, color=COLOR_ACCENT)
+                remove_shadow(tb_a)
+
+    # 下矢印（中央）
+    cx = int(x) + int(w) // 2 - int(Inches(0.15))
+    tb_dn = slide.shapes.add_textbox(cx, int(y) + kw_h, int(Inches(0.3)), arr_h)
+    tf_dn = tb_dn.text_frame
+    p_dn = tf_dn.paragraphs[0]
+    p_dn.alignment = PP_ALIGN.CENTER
+    r_dn = p_dn.add_run()
+    r_dn.text = '↓'
+    set_font(r_dn, 14, bold=True, color=COLOR_ACCENT)
+    remove_shadow(tb_dn)
+
+    # 帰着点ボックス
+    conc_y = int(y) + kw_h + arr_h
+    bg_c = add_rect(slide, int(x), conc_y, int(w), conc_h, COLOR_DARK_NAVY)
+    remove_shadow(bg_c)
+    tb_c = slide.shapes.add_textbox(
+        int(x) + int(Inches(0.2)), conc_y, int(w) - int(Inches(0.4)), conc_h
+    )
+    tf_c = tb_c.text_frame
+    tf_c.word_wrap = True
+    p_c = tf_c.paragraphs[0]
+    p_c.alignment = PP_ALIGN.CENTER
+    add_inline_text(p_c, conclusion, FONT_BODY_SUB, default_color=COLOR_WHITE)
+    remove_shadow(tb_c)
+
+    return total_h
+
+
 def render_banner(slide, item, x, y, w):
     """
     バナーを描画（ダークネイビー背景・白テキスト・14pt中央揃え）。
@@ -631,20 +795,25 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         p_lead = tf_lead.paragraphs[0]
         add_inline_text(p_lead, lead_text, FONT_LEAD, default_color=COLOR_PRIMARY)
 
-    # ── バナーを先に抽出 ──
-    banner_items  = [i for i in content_items if i.get('type') == 'banner']
-    content_items = [i for i in content_items if i.get('type') != 'banner']
+    # ── フッターアイテム（banner / flow_banner）を先に抽出 ──
+    banner_items  = [i for i in content_items if i.get('type') in ('banner', 'flow_banner')]
+    content_items = [i for i in content_items if i.get('type') not in ('banner', 'flow_banner')]
 
+    FLOW_BANNER_H = int(Inches(0.42) + Inches(0.28) + Inches(0.45))  # kw+arr+conc
     BANNER_H   = int(Inches(0.55))
     BANNER_GAP = int(Inches(0.08))
-    banner_reserved = len(banner_items) * (BANNER_H + BANNER_GAP)
+
+    def _banner_height(b):
+        return FLOW_BANNER_H if b.get('type') == 'flow_banner' else BANNER_H
+
+    banner_reserved = sum(_banner_height(b) + BANNER_GAP for b in banner_items)
 
     # ── セグメント分割 ──
     # table / columns / cards は独立セグメント、その他はテキストグループにまとめる
     segments = []
     text_buffer = []
     for item in content_items:
-        if item.get('type') in ('table', 'columns', 'cards'):
+        if item.get('type') in ('table', 'logic_table', 'columns', 'cards'):
             if text_buffer:
                 segments.append(('text', list(text_buffer)))
                 text_buffer = []
@@ -663,7 +832,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
             item.get('type') == 'divider' for item in seg_data
         )
 
-    n_tables = sum(1 for t, _ in segments if t == 'table')
+    n_tables = sum(1 for t, _ in segments if t in ('table', 'logic_table'))
     n_var    = sum(
         1 for t, d in segments
         if t in ('text', 'columns', 'cards') and not is_divider_only(d)
@@ -714,6 +883,10 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
             tbl_avail = per_table_h if per_table_h else None
             h = render_table(slide, seg_data, CONTENT_X, y, CONTENT_RW, available_h=tbl_avail)
             y += int(h) + int(Inches(0.12))
+        elif seg_type == 'logic_table':
+            tbl_avail = per_table_h if per_table_h else None
+            h = render_logic_table(slide, seg_data, CONTENT_X, y, CONTENT_RW, available_h=tbl_avail)
+            y += int(h) + int(Inches(0.12))
         elif seg_type == 'columns':
             render_columns(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
             y += var_h
@@ -723,10 +896,14 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
 
     # ── バナー描画（フッターラインの直上から上方向へ）──
     if banner_items:
-        banner_y = int(FOOTER_LINE_Y) - BANNER_GAP - BANNER_H
+        banner_y = int(FOOTER_LINE_Y) - BANNER_GAP - _banner_height(banner_items[-1])
         for b_item in reversed(banner_items):
-            render_banner(slide, b_item, CONTENT_X, banner_y, CONTENT_RW)
-            banner_y -= (BANNER_H + BANNER_GAP)
+            bh = _banner_height(b_item)
+            if b_item.get('type') == 'flow_banner':
+                render_flow_banner(slide, b_item, CONTENT_X, banner_y, CONTENT_RW)
+            else:
+                render_banner(slide, b_item, CONTENT_X, banner_y, CONTENT_RW)
+            banner_y -= (bh + BANNER_GAP)
 
     add_logo(slide, logo_path)
     add_footer(slide, page_num)
@@ -778,8 +955,11 @@ def parse_markdown(md_text):
             if re.match(r'^[\|\s\-:]+$', line):
                 # 区切り行（|---|---|）→ ヘッダー確定
                 if table_header is not None and current and current.get('type') == 'content':
+                    # FACT/WHY/INSIGHT ヘッダーを含む場合はロジックテーブル
+                    hdr_upper = [h.upper() for h in table_header]
+                    is_logic = ('FACT' in hdr_upper and 'INSIGHT' in hdr_upper)
                     table_active = {
-                        'type': 'table',
+                        'type': 'logic_table' if is_logic else 'table',
                         'headers': table_header,
                         'rows': []
                     }
@@ -916,6 +1096,22 @@ def parse_markdown(md_text):
 
         elif line == ':::':
             col_side = None
+
+        # ── 収束フローバナー（>>flow KW1 | KW2 | KW3 :: 帰着点テキスト）──
+        elif line.startswith('>>flow '):
+            flush_table()
+            rest = line[7:].strip()
+            if '::' in rest:
+                kw_part, conclusion = rest.split('::', 1)
+            else:
+                kw_part, conclusion = rest, ''
+            keywords = [k.strip() for k in kw_part.split('|')]
+            if current and current.get('type') == 'content':
+                _append_item({
+                    'type': 'flow_banner',
+                    'keywords': keywords,
+                    'conclusion': conclusion.strip(),
+                })
 
         # ── バナー（>> text）──
         elif line.startswith('>> '):
