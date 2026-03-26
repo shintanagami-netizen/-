@@ -680,11 +680,186 @@ def render_flow_banner(slide, item, x, y, w):
     return total_h
 
 
+def _draw_asis_card(slide, data, x, y, w, h, num):
+    """ASISカード: 薄グレー背景 + 赤左ボーダー + バッジ + タイトル + 箇条書き"""
+    C_BORDER = RGBColor(0xC0, 0x39, 0x2B)
+    C_BG     = RGBColor(0xF9, 0xF5, 0xF5)
+    C_TITLE  = RGBColor(0x8B, 0x20, 0x20)
+    C_BADGE  = RGBColor(0xE5, 0xB4, 0xB0)
+    C_BULLET = RGBColor(0x55, 0x55, 0x55)
+    BORD_W   = int(Pt(3))
+    BADGE_D  = int(Inches(0.20))
+    PAD_L    = BORD_W + int(Inches(0.07))
+    PAD_T    = int(Inches(0.07))
+    PAD_R    = int(Inches(0.07))
+    NUMS     = ['①', '②', '③', '④']
+
+    add_rect(slide, int(x), int(y), int(w), int(h), C_BG)
+    add_rect(slide, int(x), int(y), BORD_W, int(h), C_BORDER)
+
+    # バッジ
+    bx = int(x) + PAD_L
+    by = int(y) + PAD_T
+    badge = slide.shapes.add_shape(9, bx, by, BADGE_D, BADGE_D)
+    badge.fill.solid(); badge.fill.fore_color.rgb = C_BADGE
+    badge.line.fill.background(); remove_shadow(badge)
+    p_b = badge.text_frame.paragraphs[0]
+    p_b.alignment = PP_ALIGN.CENTER; p_b.space_before = Pt(1)
+    r_b = p_b.add_run(); r_b.text = NUMS[num - 1]
+    set_font(r_b, 12, bold=True, color=C_BORDER)
+
+    # タイトル
+    tb_t = slide.shapes.add_textbox(
+        bx + BADGE_D + int(Inches(0.04)), by,
+        int(w) - PAD_L - BADGE_D - int(Inches(0.04)) - PAD_R, BADGE_D
+    )
+    tb_t.text_frame.word_wrap = False
+    p_t = tb_t.text_frame.paragraphs[0]
+    r_t = p_t.add_run(); r_t.text = data.get('title', '')
+    set_font(r_t, 12, bold=True, color=C_TITLE); remove_shadow(tb_t)
+
+    # 箇条書き
+    bul_y = by + BADGE_D + int(Inches(0.04))
+    tb_b = slide.shapes.add_textbox(
+        bx, bul_y, int(w) - PAD_L - PAD_R, int(h) - (bul_y - int(y)) - int(Inches(0.04))
+    )
+    tf_b = tb_b.text_frame; tf_b.word_wrap = True
+    for bi, bull in enumerate(data.get('bullets', [])):
+        p = tf_b.paragraphs[0] if bi == 0 else tf_b.add_paragraph()
+        if bi > 0: p.space_before = Pt(2)
+        r_s = p.add_run(); r_s.text = '– '
+        set_font(r_s, 12, color=C_BORDER)
+        r_txt = p.add_run(); r_txt.text = bull
+        set_font(r_txt, 12, color=C_BULLET)
+    remove_shadow(tb_b)
+
+
+def _draw_tobe_card(slide, data, x, y, w, h, num):
+    """TOBEカード: 白背景 + ネイビー左ボーダー + バッジ + プロダクトタグ + タイトル + 箇条書き"""
+    C_BORDER = COLOR_DARK_NAVY
+    C_BG     = COLOR_WHITE
+    C_TITLE  = COLOR_DARK_NAVY
+    C_BADGE  = RGBColor(0x2A, 0x4E, 0x8A)
+    C_TAG    = RGBColor(0x4A, 0x9E, 0xFF)
+    C_BULLET = RGBColor(0x55, 0x55, 0x55)
+    BORD_W   = int(Pt(3))
+    BADGE_D  = int(Inches(0.20))
+    PAD_L    = BORD_W + int(Inches(0.07))
+    PAD_T    = int(Inches(0.07))
+    PAD_R    = int(Inches(0.07))
+    NUMS     = ['①', '②', '③', '④']
+
+    add_rect(slide, int(x), int(y), int(w), int(h), C_BG)
+    add_rect(slide, int(x), int(y), BORD_W, int(h), C_BORDER)
+
+    # バッジ
+    bx = int(x) + PAD_L
+    by = int(y) + PAD_T
+    badge = slide.shapes.add_shape(9, bx, by, BADGE_D, BADGE_D)
+    badge.fill.solid(); badge.fill.fore_color.rgb = C_BADGE
+    badge.line.fill.background(); remove_shadow(badge)
+    p_b = badge.text_frame.paragraphs[0]
+    p_b.alignment = PP_ALIGN.CENTER; p_b.space_before = Pt(1)
+    r_b = p_b.add_run(); r_b.text = NUMS[num - 1]
+    set_font(r_b, 12, bold=True, color=COLOR_WHITE)
+
+    # プロダクトタグ（水色バッジ）
+    product = data.get('product', '')
+    tag_x = bx + BADGE_D + int(Inches(0.05))
+    TAG_H = BADGE_D
+    TAG_W = int(Inches(0.95))
+    add_rect(slide, tag_x, by, TAG_W, TAG_H, C_TAG)
+    tb_tag = slide.shapes.add_textbox(tag_x, by, TAG_W, TAG_H)
+    tf_tag = tb_tag.text_frame; tf_tag.word_wrap = False
+    p_tag = tf_tag.paragraphs[0]; p_tag.alignment = PP_ALIGN.CENTER
+    p_tag.space_before = Pt(1)
+    r_tag = p_tag.add_run(); r_tag.text = product
+    set_font(r_tag, 12, color=COLOR_WHITE); remove_shadow(tb_tag)
+
+    # タイトル
+    title_y = by + BADGE_D + int(Inches(0.04))
+    TITLE_H = int(Inches(0.26))
+    tb_t = slide.shapes.add_textbox(
+        bx, title_y, int(w) - PAD_L - PAD_R, TITLE_H
+    )
+    tb_t.text_frame.word_wrap = True
+    p_t = tb_t.text_frame.paragraphs[0]
+    r_t = p_t.add_run(); r_t.text = data.get('title', '')
+    set_font(r_t, 12, bold=True, color=C_TITLE); remove_shadow(tb_t)
+
+    # 箇条書き
+    bul_y = title_y + TITLE_H + int(Inches(0.02))
+    tb_b = slide.shapes.add_textbox(
+        bx, bul_y, int(w) - PAD_L - PAD_R, int(h) - (bul_y - int(y)) - int(Inches(0.04))
+    )
+    tf_b = tb_b.text_frame; tf_b.word_wrap = True
+    for bi, bull in enumerate(data.get('bullets', [])):
+        p = tf_b.paragraphs[0] if bi == 0 else tf_b.add_paragraph()
+        if bi > 0: p.space_before = Pt(2)
+        r_s = p.add_run(); r_s.text = '– '
+        set_font(r_s, 12, color=C_TAG)
+        r_txt = p.add_run(); r_txt.text = bull
+        set_font(r_txt, 12, color=C_BULLET)
+    remove_shadow(tb_b)
+
+
+def render_asis_tobe_cards(slide, item, x, y, w, h):
+    """
+    ASIS→TOBE横並びカード3行構成:
+      [ASISカード①] → [TOBEカード①]
+      [ASISカード②] → [TOBEカード②]
+      [ASISカード③] → [TOBEカード③]
+    """
+    C_LB     = RGBColor(0x4A, 0x9E, 0xFF)
+    C_ASIS_H = RGBColor(0x8B, 0x20, 0x20)
+    C_TOBE_H = COLOR_DARK_NAVY
+
+    rows       = item.get('rows', [])
+    asis_title = item.get('asis_title', 'ASIS')
+    tobe_title = item.get('tobe_title', 'TOBE')
+    n          = len(rows)
+    if n == 0:
+        return h
+
+    ARROW_W  = int(w * 0.05)
+    CARD_W   = (int(w) - ARROW_W) // 2
+    HEADER_H = int(Inches(0.27))
+    GAP      = int(Inches(0.09))
+    card_h   = (int(h) - HEADER_H - GAP * (n - 1)) // n
+
+    ASIS_X  = int(x)
+    ARROW_X = ASIS_X + CARD_W
+    TOBE_X  = ARROW_X + ARROW_W
+
+    # 列ヘッダー
+    for hx, htxt, hcol in [(ASIS_X, asis_title, C_ASIS_H), (TOBE_X, tobe_title, C_TOBE_H)]:
+        tb = slide.shapes.add_textbox(hx, int(y), CARD_W, HEADER_H)
+        tb.text_frame.word_wrap = False
+        p = tb.text_frame.paragraphs[0]
+        r = p.add_run(); r.text = htxt
+        set_font(r, 12, bold=True, color=hcol); remove_shadow(tb)
+
+    # 各行
+    for i, row in enumerate(rows):
+        ry = int(y) + HEADER_H + i * (card_h + GAP)
+
+        _draw_asis_card(slide, row.get('asis', {}), ASIS_X, ry, CARD_W, card_h, i + 1)
+
+        # 矢印
+        tb_a = slide.shapes.add_textbox(ARROW_X, ry, ARROW_W, card_h)
+        tf_a = tb_a.text_frame; tf_a.word_wrap = False
+        p_a = tf_a.paragraphs[0]; p_a.alignment = PP_ALIGN.CENTER
+        p_a.space_before = Pt(card_h / 914400 * 72 * 0.30)
+        r_a = p_a.add_run(); r_a.text = '→'
+        set_font(r_a, 16, bold=True, color=C_LB); remove_shadow(tb_a)
+
+        _draw_tobe_card(slide, row.get('tobe', {}), TOBE_X, ry, CARD_W, card_h, i + 1)
+
+    return h
+
+
 def render_banner(slide, item, x, y, w):
-    """
-    バナーを描画（ダークネイビー背景・白テキスト・14pt中央揃え）。
-    戻り値: バナーの高さ（int EMU）
-    """
+    """バナーを描画（ダークネイビー背景・白テキスト・14pt中央揃え）。戻り値: バナーの高さ"""
     banner_h = int(Inches(0.55))
     bg = add_rect(slide, int(x), int(y), int(w), banner_h, COLOR_DARK_NAVY)
     remove_shadow(bg)
@@ -896,7 +1071,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     segments = []
     text_buffer = []
     for item in content_items:
-        if item.get('type') in ('table', 'logic_table', 'columns', 'cards'):
+        if item.get('type') in ('table', 'logic_table', 'columns', 'cards', 'asis_tobe'):
             if text_buffer:
                 segments.append(('text', list(text_buffer)))
                 text_buffer = []
@@ -918,7 +1093,7 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
     n_tables = sum(1 for t, _ in segments if t in ('table', 'logic_table'))
     n_var    = sum(
         1 for t, d in segments
-        if t in ('text', 'columns', 'cards') and not is_divider_only(d)
+        if t in ('text', 'columns', 'cards', 'asis_tobe') and not is_divider_only(d)
     )
 
     MIN_VAR_H = int(Inches(0.7))   # テキスト/カラムセグメント1つの最小高さ
@@ -976,6 +1151,9 @@ def make_content_slide(prs, title, section_num, items, logo_path, page_num=None)
         elif seg_type == 'cards':
             render_card_grid(slide, seg_data, int(CONTENT_X), int(y), int(CONTENT_RW), int(var_h))
             y += var_h
+        elif seg_type == 'asis_tobe':
+            render_asis_tobe_cards(slide, seg_data, CONTENT_X, y, CONTENT_RW, var_h)
+            y += var_h
 
     # ── バナー描画（フッターラインの直上から上方向へ）──
     if banner_items:
@@ -1013,6 +1191,12 @@ def parse_markdown(md_text):
     card_mode     = False  # ::cards ブロック内かどうか
     card_cur      = None   # 現在処理中のカード辞書
     cards_list    = None   # 現在の::cardsブロックのカードリスト
+    at_mode       = False  # ::asis-tobe ブロック内かどうか
+    at_rows       = []     # asis-tobeの行リスト
+    at_cur_row    = None   # 現在処理中の行 {asis:{}, tobe:{}}
+    at_side       = None   # None | 'asis' | 'tobe'
+    at_asis_title = 'ASIS'
+    at_tobe_title = 'TOBE'
 
     def flush_table():
         nonlocal table_header, table_active
@@ -1103,6 +1287,43 @@ def parse_markdown(md_text):
                 cards_list = None
                 continue
 
+        # ── ::asis-tobe ブロック内の処理 ──
+        if at_mode:
+            if line == '---':
+                # 行区切り: 現在行を確定して次の行へ
+                if at_cur_row and at_cur_row.get('asis') and at_cur_row.get('tobe'):
+                    at_rows.append(at_cur_row)
+                at_cur_row = None; at_side = None
+                continue
+            elif line.startswith('ASIS '):
+                # 新しいASISカード開始
+                if at_cur_row is None:
+                    at_cur_row = {'asis': {'title': '', 'bullets': []}, 'tobe': None}
+                at_cur_row['asis']['title'] = line[5:].strip()
+                at_side = 'asis'
+                continue
+            elif line.startswith('TOBE '):
+                # TOBEカード（プロダクト|タイトル）
+                rest = line[5:].strip()
+                if '|' in rest:
+                    prod, title = rest.split('|', 1)
+                else:
+                    prod, title = '', rest
+                if at_cur_row is None:
+                    at_cur_row = {'asis': {'title': '', 'bullets': []}, 'tobe': None}
+                at_cur_row['tobe'] = {'product': prod.strip(), 'title': title.strip(), 'bullets': []}
+                at_side = 'tobe'
+                continue
+            elif line.startswith('- ') and at_side and at_cur_row:
+                # 箇条書き
+                bull = line[2:].strip()
+                if at_side == 'asis':
+                    at_cur_row['asis']['bullets'].append(bull)
+                elif at_side == 'tobe' and at_cur_row.get('tobe'):
+                    at_cur_row['tobe']['bullets'].append(bull)
+                continue
+            # :::は上の elif line == ':::' で処理済み（at_modeを解除）
+
         # ── H3 → セクション区切りスライド ──
         if line.startswith('### '):
             if current:
@@ -1178,7 +1399,31 @@ def parse_markdown(md_text):
                     current['items'][-1]['right_title'] = col_title
 
         elif line == ':::':
-            col_side = None
+            if at_mode:
+                # asis-tobe ブロック終了
+                if at_cur_row and at_cur_row.get('asis') and at_cur_row.get('tobe'):
+                    at_rows.append(at_cur_row)
+                if current and current.get('type') == 'content':
+                    _append_item({
+                        'type': 'asis_tobe',
+                        'asis_title': at_asis_title,
+                        'tobe_title': at_tobe_title,
+                        'rows': list(at_rows),
+                    })
+                at_mode = False; at_rows = []; at_cur_row = None; at_side = None
+            else:
+                col_side = None
+
+        # ── ::asis-tobe ブロック開始 ──
+        elif line.startswith('::asis-tobe'):
+            flush_table()
+            rest = line[11:].strip()
+            if '|' in rest:
+                at_asis_title, at_tobe_title = [s.strip() for s in rest.split('|', 1)]
+            else:
+                at_asis_title = rest or 'ASIS'
+                at_tobe_title = 'TOBE'
+            at_mode = True; at_rows = []; at_cur_row = None; at_side = None
 
         # ── 収束フローバナー（>>flow KW1 | KW2 | KW3 :: 帰着点テキスト）──
         elif line.startswith('>>flow '):
