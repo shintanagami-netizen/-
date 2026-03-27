@@ -263,3 +263,273 @@ y=7.0"    フッターテキスト / ページ番号
 - テキストを羅列してスライドを構成する（図解・構造表現が必須）
 - 課題を提案元視点で書く
 - 縦の黒い装飾ラインを追加する
+
+---
+
+## モードD: pptxgenjs 高品質生成（タイムアウト防止・フェーズ分割）
+
+### ⚠️ 最重要ルール：必ずフェーズ分割で実行する
+
+**1ターンで全処理を完結させようとしてはいけない。**
+スライド枚数に関わらず、以下の3フェーズに必ず分割して実行すること。
+
+```
+Phase 1：設計    → コンテンツ設計・スクリプト生成・ファイル保存
+Phase 2：実行    → node実行・pptxファイル生成
+Phase 3：QA     → PDF変換・画像確認・修正（問題なければスキップ可）
+```
+
+各フェーズの終わりに必ずユーザーに報告し、次フェーズの実行許可を得てから進むこと。
+
+---
+
+### Phase 1：設計フェーズ
+
+#### 1-1. 環境確認
+
+```bash
+npm list pptxgenjs 2>/dev/null || npm install pptxgenjs
+```
+
+#### 1-2. コンテンツ設計
+
+ソースファイル（md・html等）を読み込み、各スライドの構成を決定する。
+設計時に必ず確認する項目：
+
+- スライド枚数と各スライドのタイトル・目的
+- 情報の優先順位（何を大きく見せるか）
+- レイアウトの選択（下記「レイアウト選択ガイド」参照）
+- So Whatの文言
+
+#### 1-3. JSスクリプト生成・保存
+
+設計をもとにJSスクリプトを生成し、`/home/user/-/create_slides.js`として保存する。
+**この時点では実行しない。**
+
+#### Phase 1 完了報告テンプレート
+
+```
+✅ Phase 1 完了
+- スクリプト生成：/home/user/-/create_slides.js
+- スライド構成：[枚数と各タイトルを列挙]
+- 次のステップ：「Phase 2を実行」と入力してください
+```
+
+---
+
+### Phase 2：実行フェーズ
+
+#### 2-1. スクリプト実行
+
+```bash
+cd /home/user/- && node create_slides.js
+```
+
+#### 2-2. コンテンツQA
+
+```bash
+pip install "markitdown[pptx]" --break-system-packages -q
+python -m markitdown /home/user/-/*.pptx
+```
+
+テキスト内容の抜け・順番ミス・誤字を確認する。
+問題があればスクリプトを修正して再実行する（この修正はPhase 2内で完結させる）。
+
+#### Phase 2 完了報告テンプレート
+
+```
+✅ Phase 2 完了
+- pptx生成：[ファイル名]
+- コンテンツQA：問題なし / [問題があれば内容]
+- 次のステップ：ビジュアル確認が必要な場合は「Phase 3を実行」、不要な場合は「完了」と入力してください
+```
+
+---
+
+### Phase 3：QAフェーズ（オプション）
+
+視覚的な確認が必要な場合のみ実行する。
+
+#### 3-1. PDF変換・画像化
+
+```bash
+cd /home/user/-
+python /mnt/skills/public/pptx/scripts/office/soffice.py --headless --convert-to pdf *.pptx
+rm -f slide-*.jpg
+pdftoppm -jpeg -r 150 *.pdf slide
+ls -1 "$PWD"/slide-*.jpg
+```
+
+#### 3-2. ビジュアル確認
+
+生成された画像を1枚ずつ確認し、以下をチェックする：
+
+- テキストの重なり・はみ出し
+- 余白バランス（端から0.5インチ以上確保されているか）
+- 低コントラスト（背景と文字の視認性）
+- 要素の位置ズレ
+
+#### 3-3. 修正→再生成
+
+問題があればスクリプトを修正して `node create_slides.js` を再実行。
+再度PDF変換→画像確認を行う（問題がなくなるまで繰り返す）。
+
+#### Phase 3 完了報告テンプレート
+
+```
+✅ 全フェーズ完了
+- 出力ファイル：/home/user/-/[ファイル名]
+- 確認済み問題：[あれば内容、なければ「なし」]
+```
+
+---
+
+### デザイン仕様（pptxgenjs・ダークテーマ）
+
+#### カラーパレット（SALESCOREダークテーマ）
+
+```javascript
+const C = {
+  dark:    "1A1A2E",   // 背景（深ネイビー）
+  mid:     "16213E",   // カード背景
+  panel:   "0F3460",   // ヘッダー・パネル背景
+  accent1: "E94560",   // レッド（警告・競合課題）
+  accent2: "4A9EFF",   // ブルー（SALESCORE・So What）
+  accent3: "F5A623",   // オレンジ（注目・数値）
+  accent4: "4CAF50",   // グリーン（ポジティブ・成長）
+  white:   "FFFFFF",
+  gray1:   "C8C8C8",   // 本文テキスト
+  gray2:   "909090",   // サブテキスト
+  gray3:   "555555",   // 区切り線・タグ背景
+};
+```
+
+#### レイアウト設定
+
+```javascript
+pres.layout = "LAYOUT_WIDE"; // 13.3" × 7.5"
+```
+
+#### 必須構成要素（全スライド）
+
+**ヘッダーバー（上部）**
+```javascript
+s.addShape(pres.shapes.RECTANGLE, { x:0, y:0, w:13.3, h:0.65, fill:{color:C.panel}, line:{color:C.panel} });
+s.addText("SALESCORE × [クライアント名]PJT｜社内共有用", { x:0.3, y:0, w:8, h:0.65, fontSize:9, color:C.gray1, valign:"middle", margin:0 });
+s.addText("[資料タイトル]", { x:8.5, y:0, w:4.5, h:0.65, fontSize:9, color:C.gray2, align:"right", valign:"middle", margin:0 });
+```
+
+**スライド番号バッジ（左上）**
+```javascript
+s.addShape(pres.shapes.RECTANGLE, { x:0.35, y:0.85, w:0.08, h:0.55, fill:{color:C.accent1}, line:{color:C.accent1} });
+s.addText("SLIDE 01", { x:0.55, y:0.82, w:3, h:0.28, fontSize:8, color:C.accent1, bold:true, margin:0 });
+```
+
+**So Whatボックス（下部）**
+```javascript
+s.addShape(pres.shapes.RECTANGLE, { x:0.3, y:5.82, w:12.7, h:1.4, fill:{color:"0F3460"}, line:{color:C.accent2, pt:1.5} });
+s.addText("So What", { x:0.5, y:5.87, w:1.4, h:0.3, fontSize:9, color:C.accent2, bold:true, margin:0 });
+```
+
+**出典フッター（競合・口コミ情報を含む場合）**
+```javascript
+s.addText("出典：社員口コミ横断分析（2024〜2026年投稿、複数類似投稿で裏付け確認）｜人材ベンチャー経営層インタビュー", {
+  x:0.3, y:7.25, w:12.7, h:0.2, fontSize:7.5, color:C.gray2, align:"center", margin:0
+});
+```
+
+#### カード設計パターン
+
+**カード共通（影付き）**
+```javascript
+// shadowオブジェクトは必ず関数で生成（オブジェクト再利用禁止）
+const makeShadow = () => ({ type:"outer", blur:8, offset:3, angle:135, color:"000000", opacity:0.25 });
+
+s.addShape(pres.shapes.RECTANGLE, {
+  x:bx, y:by, w:bw, h:bh,
+  fill:{color:C.mid}, line:{color:accentColor, pt:0},
+  shadow:makeShadow()
+});
+// トップアクセントバー
+s.addShape(pres.shapes.RECTANGLE, { x:bx, y:by, w:bw, h:0.07, fill:{color:accentColor}, line:{color:accentColor} });
+```
+
+**数値ハイライト（インパクト重視）**
+```javascript
+s.addText("1,700名", { x:sx, y:sy, w:1.9, h:0.45, fontSize:14, color:C.accent1, bold:true, align:"center", margin:0 });
+s.addText("コンサルタント数", { x:sx, y:sy+0.45, w:1.9, h:0.28, fontSize:8.5, color:C.gray2, align:"center", margin:0 });
+```
+
+**タグバッジ**
+```javascript
+s.addShape(pres.shapes.RECTANGLE, { x:tx, y:ty, w:0.8, h:0.28, fill:{color:C.gray3}, line:{color:C.gray3} });
+s.addText("タグ名", { x:tx, y:ty, w:0.8, h:0.28, fontSize:8, color:C.gray1, bold:true, align:"center", margin:0 });
+```
+
+#### 絶対に避けること（Common Pitfalls）
+
+```javascript
+// ❌ カラーコードに#を使わない（ファイル破損）
+color: "#FF0000"   // NG
+color: "FF0000"    // OK
+
+// ❌ shadowオブジェクトを使い回さない（2回目以降が破損）
+const shadow = {...};
+slide.addShape(..., {shadow});  // 2回目はNG → makeShadow()で毎回生成する
+
+// ❌ bulletにunicode記号を使わない（二重バレット）
+"• テキスト"        // NG
+{ bullet: true }   // OK
+
+// ❌ 8文字の16進数でopacityを表現しない（ファイル破損）
+color: "00000020"  // NG
+opacity: 0.12      // OK（opacityプロパティを使う）
+```
+
+---
+
+### レイアウト選択ガイド（pptxgenjs用）
+
+| 情報の種類 | 推奨レイアウト |
+|-----------|--------------|
+| 3つの並列概念 | 3カラムカード |
+| 競合比較（2社） | 左右2パネル |
+| ポジション図 | 3者横並び＋中央強調 |
+| 支援方針・施策 | 上段：図解 / 下段：2カラムカード |
+| データ・数値 | 大数値ハイライト＋説明テキスト |
+
+---
+
+### スライド構成の標準パターン（SALESCOREコンサル用）
+
+```
+Slide 1：市場・業界の構造変化（Why）
+  → 「なぜ今やるべきか」の根拠を市場データで示す
+  → レイアウト：3カラムカード＋So What
+
+Slide 2：競合・現場の実態（What）
+  → 「競合は何をしているか」の内部情報を提供する
+  → レイアウト：左右2パネル（競合A vs 競合B）
+
+Slide 3：クライアントのポジションと支援方針（How）
+  → 「だからこう支援する」を明示する
+  → レイアウト：上段ポジション図＋下段支援カード
+```
+
+---
+
+### モードD 実行チェックリスト
+
+#### Phase 1 終了前
+- [ ] 全スライドの構成を設計したか
+- [ ] JSスクリプトを `/home/user/-/create_slides.js` に保存したか
+- [ ] スクリプトを実行していないか（Phase 2まで実行禁止）
+
+#### Phase 2 終了前
+- [ ] `node create_slides.js` でエラーが出ていないか
+- [ ] markitdownでコンテンツを確認したか
+
+#### Phase 3 終了前（実施した場合）
+- [ ] 全スライドの画像を目視確認したか
+- [ ] テキストの重なり・はみ出しがないか
+- [ ] 余白が0.5インチ以上確保されているか
